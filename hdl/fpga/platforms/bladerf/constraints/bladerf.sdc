@@ -1,5 +1,5 @@
 # Clock inputs
-create_clock -period "100.0 MHz" -waveform {0.495 5.495} [get_ports fx3_pclk]
+create_clock -period "100.0 MHz" -waveform {0.6 5.6} [get_ports fx3_pclk]
 create_clock -period "38.4 MHz"  [get_ports c4_clock]
 create_clock -period "38.4 MHz"  [get_ports lms_pll_out]
 create_clock -period "19.2 MHz"  [get_ports lms_sclk]
@@ -22,15 +22,15 @@ set_false_path -from * -to [get_keepers reset_synchronizer*]
 ### Fast Interfaces ###
 
 # FX3 GPIF/CTL interface
-set_input_delay -clock [get_clocks fx3_virtual] -max 8.005 [get_ports {fx3_gpif* fx3_ctl*}]
-set_input_delay -clock [get_clocks fx3_virtual] -min 0.005 [get_ports {fx3_gpif* fx3_ctl*}] -add_delay
+set_input_delay -clock [get_clocks fx3_virtual] -max 8.225 [get_ports {fx3_gpif* fx3_ctl*}]
+set_input_delay -clock [get_clocks fx3_virtual] -min 0.225 [get_ports {fx3_gpif* fx3_ctl*}] -add_delay
 
-set_output_delay -clock [get_clocks fx3_virtual] -max 2.225 [get_ports {fx3_gpif* fx3_ctl*}]
-set_output_delay -clock [get_clocks fx3_virtual] -min -0.276 [get_ports {fx3_gpif* fx3_ctl*}] -add_delay
+set_output_delay -clock [get_clocks fx3_virtual] -max 2.5 [get_ports {fx3_gpif* fx3_ctl*}]
+set_output_delay -clock [get_clocks fx3_virtual] -min 0.75 [get_ports {fx3_gpif* fx3_ctl*}] -add_delay
 
-set_multicycle_path -hold -end -from [get_clocks U_fx3_pll*clk[0]] -to [get_clocks fx3_virtual] 1
+#set_multicycle_path -hold -end -from [get_clocks U_fx3_pll*clk[0]] -to [get_clocks fx3_virtual] 1
 set_multicycle_path -setup -start -from [get_clocks fx3_virtual] -to [get_clocks U_fx3_pll*clk[0]] 2
-set_multicycle_path -hold -end -from [get_clocks fx3_virtual] -to [get_clocks U_fx3_pll*clk[0]] 1
+#set_multicycle_path -hold -end -from [get_clocks fx3_virtual] -to [get_clocks U_fx3_pll*clk[0]] 0
 
 # LMS sample interface
 set_input_delay -clock [get_clocks lms_rx_virtual] -max  5.832 [get_ports {lms_rx_data* lms_rx_iq_select}]

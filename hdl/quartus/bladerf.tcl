@@ -58,6 +58,7 @@ set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to fx3_ctl[*]
 set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to fx3_gpif[*]
 set_global_assignment -name OPTIMIZE_POWER_DURING_FITTING "EXTRA EFFORT"
 set_global_assignment -name FITTER_AUTO_EFFORT_DESIRED_SLACK_MARGIN "1 ns"
+#set_global_assignment -name RESERVE_ALL_UNUSED_PINS_WEAK_PULLUP "AS OUTPUT DRIVING GROUND"
 
 # Create an base revision
 set_global_assignment -name QIP_FILE [file normalize ../../fpga/platforms/bladerf/bladerf.qip]
