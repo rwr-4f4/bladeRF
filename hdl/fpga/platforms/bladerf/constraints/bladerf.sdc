@@ -28,6 +28,9 @@ set_input_delay -clock [get_clocks fx3_virtual] -min 0.225 [get_ports {fx3_gpif*
 set_output_delay -clock [get_clocks fx3_virtual] -max 2.5 [get_ports {fx3_gpif* fx3_ctl*}]
 set_output_delay -clock [get_clocks fx3_virtual] -min 0.75 [get_ports {fx3_gpif* fx3_ctl*}] -add_delay
 
+set_multicycle_path -from [get_clocks {fx3_virtual}] -to [get_clocks {U_fx3_pll|altpll_component|auto_generated|pll1|clk[0]}] -setup -start 2
+set_multicycle_path -from [get_clocks {fx3_virtual}] -to [get_clocks {U_fx3_pll|altpll_component|auto_generated|pll1|clk[0]}] -hold -start 2
+
 # LMS sample interface
 set_input_delay -clock [get_clocks lms_rx_virtual] -max  5.832 [get_ports {lms_rx_data* lms_rx_iq_select}]
 set_input_delay -clock [get_clocks lms_rx_virtual] -min  -0.168 [get_ports {lms_rx_data* lms_rx_iq_select}] -add_delay
