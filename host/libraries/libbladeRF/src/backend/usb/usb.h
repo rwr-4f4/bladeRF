@@ -54,6 +54,10 @@
 #   define BULK_TIMEOUT_MS  1000
 #endif
 
+/* Size of a host<->FPGA message in samples */
+#define USB_MSG_SIZE_SS    512
+#define USB_MSG_SIZE_HS    256
+
 typedef enum {
     USB_TARGET_DEVICE,
     USB_TARGET_INTERFACE,

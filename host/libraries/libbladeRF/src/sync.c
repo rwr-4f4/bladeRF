@@ -31,6 +31,7 @@
 #include "sync.h"
 #include "sync_worker.h"
 #include "minmax.h"
+#include "metadata.h"
 
 static inline size_t samples2bytes(struct bladerf_sync *s, unsigned int n) {
     return s->stream_config.bytes_per_sample * n;
@@ -56,6 +57,7 @@ int sync_init(struct bladerf *dev,
 
     switch (format) {
         case BLADERF_FORMAT_SC16_Q11:
+        case BLADERF_FORMAT_SC16_Q11_META:
             bytes_per_sample = 4;
             break;
 
@@ -103,6 +105,11 @@ int sync_init(struct bladerf *dev,
     sync->stream_config.num_xfers = num_transfers;
     sync->stream_config.timeout_ms = stream_timeout;
     sync->stream_config.bytes_per_sample = bytes_per_sample;
+
+    sync->meta.state = SYNC_META_STATE_GET_HEADER;
+    sync->meta.msg_per_buf = buffer_size / dev->msg_size;
+    sync->meta.samples_per_msg = dev->msg_size -
+                                 (METADATA_HEADER_SIZE / bytes_per_sample);
 
 
     MUTEX_INIT(&sync->buf_mgmt.lock);
@@ -200,13 +207,22 @@ static int wait_for_buffer(struct buffer_mgmt *b, unsigned int timeout_ms,
 #   define SYNC_WORKER_START_TIMEOUT_MS 250
 #endif
 
+static inline void advance_rx_buffer(struct buffer_mgmt *b)
+{
+    log_verbose("%s: Marking buf[%u] empty.\n", __FUNCTION__, b->cons_i);
+
+    b->status[b->cons_i] = SYNC_BUFFER_EMPTY;
+    b->cons_i = (b->cons_i + 1) % b->num_buffers;
+}
+
 int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
-             struct bladerf_metadata *metadata, unsigned int timeout_ms)
+            struct bladerf_metadata *user_meta, unsigned int timeout_ms)
 {
     struct bladerf_sync *s = dev->sync[BLADERF_MODULE_RX];
     struct buffer_mgmt *b;
 
     int status = 0;
+    bool exit_early = false;
     unsigned int samples_returned = 0;
     uint8_t *samples_dest = (uint8_t*)samples;
     uint8_t *buf_src;
@@ -214,13 +230,18 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
     unsigned int samples_per_buffer;
 
     if (s == NULL || samples == NULL) {
+        log_debug("NULL pointer passed to %s\n", __FUNCTION__);
+        return BLADERF_ERR_INVAL;
+    } else if (s->stream_config.format == BLADERF_FORMAT_SC16_Q11 &&
+               user_meta == NULL) {
+        log_debug("NULL metadata pointer passed to %s\n", __FUNCTION__);
         return BLADERF_ERR_INVAL;
     }
 
     b = &s->buf_mgmt;
     samples_per_buffer = s->stream_config.samples_per_buffer;
 
-    while (samples_returned < num_samples && status == 0) {
+    while (!exit_early && samples_returned < num_samples && status == 0) {
 
         switch (s->state) {
             case SYNC_STATE_CHECK_WORKER: {
@@ -308,10 +329,24 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                 b->partial_off = 0;
                 MUTEX_UNLOCK(&b->lock);
 
-                s->state= SYNC_STATE_USING_BUFFER;
+                switch (s->stream_config.format) {
+                    case BLADERF_FORMAT_SC16_Q11:
+                        s->state = SYNC_STATE_USING_BUFFER;
+                        break;
+
+                    case BLADERF_FORMAT_SC16_Q11_META:
+                        s->state = SYNC_STATE_USING_BUFFER_META;
+                        s->meta.copied_data = false;
+                        s->meta.curr_msg_off = 0;
+                        break;
+
+                    default:
+                        assert(!"Invalid stream format");
+                        status = BLADERF_ERR_UNEXPECTED;
+                }
                 break;
 
-            case SYNC_STATE_USING_BUFFER:
+            case SYNC_STATE_USING_BUFFER: /* SC16Q11 buffers w/o metadata */
                 MUTEX_LOCK(&b->lock);
 
                 buf_src = (uint8_t*)b->buffers[b->cons_i];
@@ -336,13 +371,130 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                     /* Check for symptom of out-of-bounds accesses */
                     assert(b->partial_off == samples_per_buffer);
 
-                    log_verbose("%s: Marking buf[%u] empty.\n",
-                                __FUNCTION__, b->cons_i);
-
-                    b->status[b->cons_i] = SYNC_BUFFER_EMPTY;
-                    b->cons_i = (b->cons_i + 1) % b->num_buffers;
-
+                    advance_rx_buffer(b);
                     s->state = SYNC_STATE_WAIT_FOR_BUFFER;
+                }
+
+                MUTEX_UNLOCK(&b->lock);
+                break;
+
+
+            case SYNC_STATE_USING_BUFFER_META: /* SC16Q11 buffers w/ metadata */
+                MUTEX_LOCK(&b->lock);
+
+                buf_src = (uint8_t*)b->buffers[b->cons_i];
+
+                switch (s->meta.state) {
+                    case SYNC_META_STATE_GET_HEADER:
+
+                        s->meta.curr_msg =
+                            &buf_src[dev->msg_size * s->meta.msg_num];
+
+                        s->meta.msg_timestamp =
+                            metadata_get_timestamp(s->meta.curr_msg);
+
+                        s->meta.msg_flags =
+                            metadata_get_flags(s->meta.curr_msg);
+
+                        s->meta.curr_msg_off = METADATA_HEADER_SIZE;
+
+                        /* We've encountered a discontinuity and need to return
+                         * what we have so far, setting the status flags */
+                        if (s->meta.copied_data &&
+                            s->meta.msg_timestamp != s->meta.curr_timestamp) {
+
+                            user_meta->status |= BLADERF_META_STATUS_OVERRUN;
+                            user_meta->actual_rx_samples = samples_returned;
+                            exit_early = true;
+                        }
+
+                        s->meta.curr_timestamp = s->meta.msg_timestamp;
+                        break;
+
+                    case SYNC_META_STATE_GET_SAMPLES:
+
+                        if (user_meta->timestamp < s->meta.curr_timestamp) {
+                            status = BLADERF_ERR_TIME_PAST;
+                        } else if ((user_meta->flags & BLADERF_META_FLAG_NOW) ||
+                                   user_meta->timestamp == s->meta.curr_timestamp) {
+
+                            const unsigned int left_in_msg =
+                                                    s->meta.samples_per_msg -
+                                                    s->meta.curr_msg_off;
+
+                            /* Copy the request amount up to the end of a
+                             * this message in the current buffer */
+                            samples_to_copy =
+                                uint_min(num_samples - samples_returned, left_in_msg);
+
+                            memcpy(samples_dest + samples2bytes(s, samples_returned),
+                                   s->meta.curr_msg + s->meta.curr_msg_off,
+                                   samples2bytes(s, samples_to_copy));
+
+                            samples_returned += samples_to_copy;
+                            s->meta.curr_msg_off += samples_to_copy;
+
+                            if (!s->meta.copied_data &&
+                                (user_meta->flags & BLADERF_META_FLAG_NOW)) {
+
+                                /* Provide the user with the timestamp at the
+                                 * first returned sample when the
+                                 * NOW flag has been provided */
+                                user_meta->timestamp = s->meta.curr_timestamp;
+                            }
+
+                            s->meta.copied_data = true;
+                            s->meta.curr_timestamp += samples_to_copy;
+
+                            if (s->meta.curr_msg_off >= s->meta.samples_per_msg) {
+                                assert(s->meta.curr_msg_off == s->meta.samples_per_msg);
+
+                                s->meta.state = SYNC_META_STATE_GET_HEADER;
+                                s->meta.msg_num++;
+
+                                if (s->meta.msg_num >= s->meta.msg_per_buf) {
+                                    advance_rx_buffer(b);
+                                    s->state = SYNC_STATE_WAIT_FOR_BUFFER;
+                                }
+                            }
+
+                        } else {
+                            const unsigned int time_delta =
+                                user_meta->timestamp - s->meta.curr_timestamp;
+
+                            const unsigned int left_in_msg =
+                                s->meta.samples_per_msg - s->meta.curr_msg_off;
+
+                            const unsigned int left_in_buffer =
+                                samples_per_buffer -
+                                s->meta.samples_per_msg * (s->meta.msg_num) -
+                                s->meta.curr_msg_off;
+
+                            if (time_delta >= left_in_buffer) {
+                                /* Discard the remainder of this buffer */
+                                advance_rx_buffer(b);
+                                s->state = SYNC_STATE_WAIT_FOR_BUFFER;
+
+                                log_verbose("%s: Discarding rest of buffer.\n",
+                                            __FUNCTION__);
+
+                            } else if (time_delta <= left_in_msg) {
+                                /* Fast forward within the current message */
+                                s->meta.curr_msg_off += time_delta;
+                                s->meta.curr_timestamp += time_delta;
+
+                                log_verbose("%s: Seeking within message.\n",
+                                            __FUNCTION__);
+                            } else {
+                                log_verbose("%s: Seeking within buffer.\n",
+                                            __FUNCTION__);
+                            }
+                        }
+                        break;
+
+                    default:
+                        assert(!"Invalid state");
+                        status = BLADERF_ERR_UNEXPECTED;
                 }
 
                 MUTEX_UNLOCK(&b->lock);
@@ -495,6 +647,9 @@ int sync_tx(struct bladerf *dev, void *samples, unsigned int num_samples,
                 }
 
                 MUTEX_UNLOCK(&b->lock);
+                break;
+
+            case SYNC_STATE_USING_BUFFER_META: /* SC16Q11 buffers w/ metadata */
                 break;
         }
     }

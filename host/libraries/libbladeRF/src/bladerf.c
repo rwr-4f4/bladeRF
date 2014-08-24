@@ -44,6 +44,7 @@
 #include "version_compat.h"
 #include "fpga.h"
 #include "flash_fields.h"
+#include "backend/usb/usb.h"
 
 /*------------------------------------------------------------------------------
  * Device discovery & initialization/deinitialization
@@ -122,10 +123,19 @@ int bladerf_open_with_devinfo(struct bladerf **opened_device,
         goto error;
     }
 
-    if (dev->usb_speed != BLADERF_DEVICE_SPEED_HIGH &&
-        dev->usb_speed != BLADERF_DEVICE_SPEED_SUPER) {
-        log_debug("Unsupported device speed: %d\n", dev->usb_speed);
-        goto error;
+    switch (dev->usb_speed) {
+        case BLADERF_DEVICE_SPEED_SUPER:
+            dev->msg_size = USB_MSG_SIZE_SS;
+            break;
+
+        case BLADERF_DEVICE_SPEED_HIGH:
+            dev->msg_size = USB_MSG_SIZE_HS;
+            break;
+
+        default:
+            status = BLADERF_ERR_UNEXPECTED;
+            log_error("Unsupported device speed: %d\n", dev->usb_speed);
+            goto error;
     }
 
     /* Verify that we have a sufficent firmware version before continuing. */
@@ -1040,6 +1050,8 @@ const char * bladerf_strerror(int error)
             return "An FPGA update is required";
         case BLADERF_ERR_UPDATE_FW:
             return "A firmware update is required";
+        case BLADERF_ERR_TIME_PAST:
+            return "Requested timestamp is in the past";
         case 0:
             return "Success";
         default:

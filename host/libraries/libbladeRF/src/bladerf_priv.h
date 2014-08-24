@@ -100,6 +100,9 @@ struct bladerf {
     int legacy;
 
     bladerf_dev_speed usb_speed;
+    size_t msg_size; /* Fundamental "chunk" size of the data the FPGA sends to
+                      * the host. For USB, this  subset of the DMA transfer
+                      * size. */
 
     /* Backend's private data  */
     void *backend;

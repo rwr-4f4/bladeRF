@@ -78,6 +78,7 @@ extern "C" {
 #define BLADERF_ERR_NO_FILE     (-11) /**< File not found */
 #define BLADERF_ERR_UPDATE_FPGA (-12) /**< An FPGA update is required */
 #define BLADERF_ERR_UPDATE_FW   (-13) /**< A firmware update is requied */
+#define BLADERF_ERR_TIME_PAST   (-14) /**< Requested timestamp is in the past */
 
 /** @} (End RETCODES) */
 
@@ -1173,6 +1174,29 @@ typedef enum {
      * large.
      */
     BLADERF_FORMAT_SC16_Q11,
+
+    /**
+     * This format is the same as the BLADERF_FORMAT_SC16_Q11 format, except the
+     * first 4 samples (16 bytes) in every block of 1024 samples are replaced
+     * with metadata, organized as follows, with all fields being little endian
+     * byte order:
+     *
+     * <pre>
+     *  0x00 [uint32_t:  Reserved]
+     *  0x04 [uint64_t:  64-bit Timestamp]
+     *  0x0c [uint32_t:  BLADERF_META_FLAG_* flags]
+     * </pre>
+     *
+     * When using the bladerf_sync_rx() and bladerf_sync_tx() functions,
+     * this detail is transparent to caller. These functions take care of
+     * packing/unpacking the metadata into/from the data, via the
+     * bladerf_metadata structure.
+     *
+     * Currently, when using the asynchronous data transfer interface, the user
+     * is responsible for manually packing/unpacking this metadata into/from
+     * their sample data.
+     */
+    BLADERF_FORMAT_SC16_Q11_META,
 } bladerf_format;
 
 /**
@@ -1189,24 +1213,18 @@ typedef enum {
  */
 
 /**
- * The host-side data stream encountered an overrun failure
+ * A sample overrun has occurred. This indicates that either the host
+ * (more likely) or the FPGA is not keeping up with the incoming samples
  */
-#define BLADERF_META_STATUS_SW_OVERRUN  (1 << 0)
+#define BLADERF_META_STATUS_OVERRUN  (1 << 0)
 
 /**
- * The host-side data stream encountered an underrun failure
+ * A sample underrun has occurred. This generally only occurrs on the TX module
+ * when the FPGA is starved of samples.
+ *
+ * @note libbladeRF does not report this status. It is here for future use.
  */
-#define BLADERF_META_STATUS_SW_UNDERRUN (1 << 1)
-
-/**
- * An overrun failure occurred in the FPGA
- */
-#define BLADERF_META_STATUS_HW_OVERRUN  (1 << 8)
-
-/**
- * An underrrun failure occurred in the FPGA
- */
-#define BLADERF_META_STATUS_HW_UNDERRUN (1 << 9)
+#define BLADERF_META_STATUS_UNDERRUN (1 << 1)
 
 
 
@@ -1224,6 +1242,15 @@ typedef enum {
  */
 #define BLADERF_META_FLAG_BURST_END     (1 << 1)
 
+/**
+ * For RX, this requests that any available samples be provided with
+ * metadata, and causes the bladerf_sync_rx() function to update the
+ * bladerf_metadata `timestamp` field with the time of the first sample
+ * returned in the buffer.
+ *
+ * For TX, this TODO
+ */
+#define BLADERF_META_FLAG_NOW           (1 << 31)
 
 /**
  * Sample metadata
@@ -1257,6 +1284,15 @@ struct bladerf_metadata {
      * See the BLADERF_META_STATUS_* values for possible status items.
      */
     uint32_t status;
+
+    /**
+     * This output parameter is updated to refelct the actual number of
+     * continguous samples that have been populated in an RX buffer.
+     *
+     * This will not be equal to the requested count in the event of a
+     * discontinuity (i.e., when the status field indicates an overrun).
+     */
+    size_t actual_rx_samples;
 };
 
 
