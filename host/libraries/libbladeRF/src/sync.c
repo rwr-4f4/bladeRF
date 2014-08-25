@@ -248,6 +248,7 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
 
     int status = 0;
     bool exit_early = false;
+    bool copied_data = false;
     unsigned int samples_returned = 0;
     uint8_t *samples_dest = (uint8_t*)samples;
     uint8_t *buf_src;
@@ -361,7 +362,6 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
 
                     case BLADERF_FORMAT_SC16_Q11_META:
                         s->state = SYNC_STATE_USING_BUFFER_META;
-                        s->meta.copied_data = false;
                         s->meta.curr_msg_off = 0;
                         break;
 
@@ -413,32 +413,52 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                     case SYNC_META_STATE_GET_HEADER:
 
                         s->meta.curr_msg =
-                            &buf_src[dev->msg_size * s->meta.msg_num];
+                            buf_src +
+                            samples2bytes(s, dev->msg_size * s->meta.msg_num);
 
                         s->meta.msg_timestamp =
                             metadata_get_timestamp(s->meta.curr_msg);
 
+                        // FIXME This needs to get moved into the FPGA
+                        s->meta.msg_timestamp /= 2;
+
                         s->meta.msg_flags =
                             metadata_get_flags(s->meta.curr_msg);
 
-                        s->meta.curr_msg_off = METADATA_HEADER_SIZE;
+                        s->meta.curr_msg_off = 0;
 
                         /* We've encountered a discontinuity and need to return
                          * what we have so far, setting the status flags */
-                        if (s->meta.copied_data &&
+                        if (copied_data &&
                             s->meta.msg_timestamp != s->meta.curr_timestamp) {
 
                             user_meta->status |= BLADERF_META_STATUS_OVERRUN;
                             user_meta->actual_rx_samples = samples_returned;
                             exit_early = true;
+                            log_debug("Sample discontinuity detected @ "
+                                      "buffer %u, message %u: Expected t=%llu, "
+                                      "got t=%llu\n",
+                                      b->cons_i, s->meta.msg_num,
+                                      (unsigned long long)s->meta.curr_timestamp,
+                                      (unsigned long long)s->meta.msg_timestamp);
+
+                        } else {
                         }
 
                         s->meta.curr_timestamp = s->meta.msg_timestamp;
+                        s->meta.state = SYNC_META_STATE_GET_SAMPLES;
                         break;
 
                     case SYNC_META_STATE_GET_SAMPLES:
 
-                        if (user_meta->timestamp < s->meta.curr_timestamp) {
+                        if ((user_meta->flags & BLADERF_META_FLAG_NOW) == 0 &&
+                            user_meta->timestamp < s->meta.curr_timestamp) {
+
+                            log_debug("Current timestamp is %llu, "
+                                      "requested %llu\n",
+                                      (unsigned long long)s->meta.curr_timestamp,
+                                      (unsigned long long)user_meta->timestamp);
+
                             status = BLADERF_ERR_TIME_PAST;
                         } else if ((user_meta->flags & BLADERF_META_FLAG_NOW) ||
                                    user_meta->timestamp == s->meta.curr_timestamp) {
@@ -453,23 +473,30 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                                 uint_min(num_samples - samples_returned, left_in_msg);
 
                             memcpy(samples_dest + samples2bytes(s, samples_returned),
-                                   s->meta.curr_msg + s->meta.curr_msg_off,
+                                   s->meta.curr_msg +
+                                    METADATA_HEADER_SIZE + s->meta.curr_msg_off,
                                    samples2bytes(s, samples_to_copy));
 
                             samples_returned += samples_to_copy;
                             s->meta.curr_msg_off += samples_to_copy;
 
-                            if (!s->meta.copied_data &&
+                            if (!copied_data &&
                                 (user_meta->flags & BLADERF_META_FLAG_NOW)) {
 
                                 /* Provide the user with the timestamp at the
                                  * first returned sample when the
                                  * NOW flag has been provided */
                                 user_meta->timestamp = s->meta.curr_timestamp;
+                                log_verbose("Updated user meta timestamp with: "
+                                            "%llu\n", (unsigned long long)
+                                            user_meta->timestamp);
                             }
 
-                            s->meta.copied_data = true;
+                            copied_data = true;
                             s->meta.curr_timestamp += samples_to_copy;
+
+                            log_verbose("After copying samples, t=%llu\n",
+                                        (unsigned long long)s->meta.curr_timestamp);
 
                             if (s->meta.curr_msg_off >= s->meta.samples_per_msg) {
                                 assert(s->meta.curr_msg_off == s->meta.samples_per_msg);
@@ -508,7 +535,8 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                                 s->meta.curr_msg_off += time_delta;
                                 s->meta.curr_timestamp += time_delta;
 
-                                log_verbose("%s: Seeking within message.\n",
+                                log_verbose("%s: Seeking within message (t=%llu)\n",
+                                            s->meta.curr_timestamp,
                                             __FUNCTION__);
                             } else {
                                 log_verbose("%s: Seeking within buffer.\n",

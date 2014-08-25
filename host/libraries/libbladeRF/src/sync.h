@@ -89,9 +89,8 @@ struct sync_meta
     sync_meta_state state;        /* State of metadata processing */
 
     uint8_t *curr_msg;            /* Points to current message in the buffer */
-    size_t   curr_msg_off;        /* Offset into current message (samples) */
-    bool copied_data;
-
+    size_t   curr_msg_off;        /* Offset into current message (samples),
+                                   * ignoring the 4-samples worth of metadata */
     unsigned int msg_per_buf;     /* Number of data messages per buffer */
     unsigned int msg_num;         /* Which message within the buffer are we in?
                                    * Range is: 0 to msg_per_buf   */
