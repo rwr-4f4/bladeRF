@@ -256,6 +256,7 @@ int main(int argc, char *argv[])
     for (i = 0; i < ARRAY_SIZE(tests); i++) {
         if (!strcasecmp(p.test_name, tests[i]->name)) {
             status = tests[i]->run(dev, &p);
+            break;
         }
     }
 

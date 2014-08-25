@@ -136,9 +136,9 @@ static int run(struct bladerf *dev, struct app_params *p,
 
         /* Calculate the next expected timestamp
          * FIXME We need to change the FPGA to remove the 2x factor */
-        timestamp = meta.timestamp + 2 * t->gap;
+        timestamp = meta.timestamp + t->gap;
 
-        status = bladerf_sync_rx(dev, samples, t->gap, &meta, TIMEOUT_MS);
+        status = bladerf_sync_rx(dev, samples, gap, &meta, TIMEOUT_MS);
         if (status != 0) {
             fprintf(stderr, "RX %u failed: %s\n", i, bladerf_strerror(status));
             goto out;
@@ -148,7 +148,7 @@ static int run(struct bladerf *dev, struct app_params *p,
             pass = false;
             fprintf(stderr, "Timestamp mismatch @ %u. "
                     "Expected 0x%016"PRIx64", got 0x%016"PRIx64"\n",
-                    i, meta.timestamp, timestamp);
+                    i, timestamp, meta.timestamp);
 
         }
 
