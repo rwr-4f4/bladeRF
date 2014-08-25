@@ -2435,6 +2435,22 @@ int CALL_CONV bladerf_lms_get_dc_cals(struct bladerf *dev,
 #define BLADERF_GPIO_FEATURE_SMALL_DMA_XFER (1 << 7)
 
 /**
+ * Enable-bit for timestamp counter in the FPGA
+ */
+#define BLADERF_GPIO_TIMESTAMP      (1 << 16)
+
+/**
+ * Timestamp 2x divider control
+ *
+ * By default (value = 0), the sample counter is incremented with I and Q,
+ * yielding two counts per sample.
+ *
+ * Set this bit to 1 to enable a 2x timestamp divider, effectively
+ * achieving 1 timestamp count per sample.
+ * */
+#define BLADERF_GPIO_TIMESTAMP_DIV2 (1 << 17)
+
+/**
  * Read a configuration GPIO register
  *
  * @param   dev         Device handle
