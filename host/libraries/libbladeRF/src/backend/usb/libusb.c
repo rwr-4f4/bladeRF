@@ -777,6 +777,7 @@ static int submit_transfer(struct bladerf_stream *stream, void *buffer)
 
     switch (stream->format) {
         case BLADERF_FORMAT_SC16_Q11:
+        case BLADERF_FORMAT_SC16_Q11_META:
             bytes_per_buffer = sc16q11_to_bytes(stream->samples_per_buffer);
             break;
 
