@@ -62,9 +62,28 @@ static const struct test_case tests[] = {
     { 16 * 1024, 1000 },
     { 32 * 1024, 1000 },
     { 64 * 1024, 1000 },
-    { RANDOM_GAP_SIZE, 10000 },
+    { RANDOM_GAP_SIZE, 500 },
 };
 static const size_t num_tests = sizeof(tests) / sizeof(tests[0]);
+
+static inline uint64_t get_gap(struct app_params *p, const struct test_case *t)
+{
+    uint64_t gap;
+
+    if (t->gap == 0) {
+        const uint64_t tmp = randval_update(&p->prng_state) % BUF_SIZE;
+        if (tmp == 0) {
+            gap = BUF_SIZE;
+        } else {
+            gap = tmp;
+        }
+    } else {
+        gap = t->gap;
+    }
+
+    assert(gap <= BUF_SIZE);
+    return gap;
+}
 
 static int run(struct bladerf *dev, struct app_params *p,
                int16_t *samples, const struct test_case *t)
@@ -111,7 +130,8 @@ static int run(struct bladerf *dev, struct app_params *p,
     printf("--------------------------------------------------------\n");
 
     /* Initial read to get a starting timestamp */
-    status = bladerf_sync_rx(dev, samples, t->gap, &meta, TIMEOUT_MS);
+    gap = get_gap(p, t);
+    status = bladerf_sync_rx(dev, samples, gap, &meta, TIMEOUT_MS);
     if (status != 0) {
         fprintf(stderr, "Intial RX failed: %s\n", bladerf_strerror(status));
         goto out;
@@ -122,21 +142,10 @@ static int run(struct bladerf *dev, struct app_params *p,
 
     for (i = 0; i < t->iterations && status == 0 && pass; i++) {
 
-        if (t->gap == 0) {
-            const uint64_t tmp = randval_update(&p->prng_state) % BUF_SIZE;
-            if (tmp == 0) {
-                gap = BUF_SIZE;
-            } else {
-                gap = tmp;
-            }
-        } else {
-            gap = t->gap;
-        }
-        assert(t->gap <= BUF_SIZE);
-
         /* Calculate the next expected timestamp
          * FIXME We need to change the FPGA to remove the 2x factor */
-        timestamp = meta.timestamp + t->gap;
+        timestamp = meta.timestamp + gap;
+        gap = get_gap(p, t);
 
         status = bladerf_sync_rx(dev, samples, gap, &meta, TIMEOUT_MS);
         if (status != 0) {
