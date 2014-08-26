@@ -506,6 +506,7 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
 
                                 if (s->meta.msg_num >= s->meta.msg_per_buf) {
                                     advance_rx_buffer(b);
+                                    s->meta.msg_num = 0;
                                     s->state = SYNC_STATE_WAIT_FOR_BUFFER;
                                 }
                             }
