@@ -32,12 +32,7 @@
 #include <inttypes.h>
 #include <libbladeRF.h>
 #include "test_timestamps.h"
-
-/* TODO Make sync params configurable */
-#define NUM_BUFFERS 16
-#define NUM_XFERS   8
-#define BUF_SIZE    (64 * 1024)
-#define TIMEOUT_MS  1000
+#include "rel_assert.h"
 
 #define RANDOM_GAP_SIZE 0
 
@@ -71,9 +66,9 @@ static inline uint64_t get_gap(struct app_params *p, const struct test_case *t)
     uint64_t gap;
 
     if (t->gap == 0) {
-        const uint64_t tmp = randval_update(&p->prng_state) % BUF_SIZE;
+        const uint64_t tmp = randval_update(&p->prng_state) % p->buf_size;
         if (tmp == 0) {
-            gap = BUF_SIZE;
+            gap = p->buf_size;
         } else {
             gap = tmp;
         }
@@ -81,7 +76,7 @@ static inline uint64_t get_gap(struct app_params *p, const struct test_case *t)
         gap = t->gap;
     }
 
-    assert(gap <= BUF_SIZE);
+    assert(gap <= p->buf_size);
     return gap;
 }
 
@@ -102,10 +97,10 @@ static int run(struct bladerf *dev, struct app_params *p,
     status = bladerf_sync_config(dev,
                                  BLADERF_MODULE_RX,
                                  BLADERF_FORMAT_SC16_Q11_META,
-                                 NUM_BUFFERS,
-                                 BUF_SIZE,
-                                 NUM_XFERS,
-                                 TIMEOUT_MS);
+                                 p->num_buffers,
+                                 p->buf_size,
+                                 p->num_xfers,
+                                 p->timeout_ms);
 
     if (status != 0) {
         fprintf(stderr, "Failed to configure RX sync i/f: %s\n",
@@ -131,7 +126,7 @@ static int run(struct bladerf *dev, struct app_params *p,
 
     /* Initial read to get a starting timestamp */
     gap = get_gap(p, t);
-    status = bladerf_sync_rx(dev, samples, gap, &meta, TIMEOUT_MS);
+    status = bladerf_sync_rx(dev, samples, gap, &meta, p->timeout_ms);
     if (status != 0) {
         fprintf(stderr, "Intial RX failed: %s\n", bladerf_strerror(status));
         goto out;
@@ -147,7 +142,7 @@ static int run(struct bladerf *dev, struct app_params *p,
         timestamp = meta.timestamp + gap;
         gap = get_gap(p, t);
 
-        status = bladerf_sync_rx(dev, samples, gap, &meta, TIMEOUT_MS);
+        status = bladerf_sync_rx(dev, samples, gap, &meta, p->timeout_ms);
         if (status != 0) {
             fprintf(stderr, "RX %u failed: %s\n", i, bladerf_strerror(status));
             goto out;
@@ -185,7 +180,7 @@ int test_fn_rx_gaps(struct bladerf *dev, struct app_params *p)
     int16_t *samples;
     size_t i;
 
-    samples = malloc(BUF_SIZE * 2 * sizeof(int16_t));
+    samples = malloc(p->buf_size * 2 * sizeof(int16_t));
     if (samples == NULL) {
         perror("malloc");
         return BLADERF_ERR_MEM;

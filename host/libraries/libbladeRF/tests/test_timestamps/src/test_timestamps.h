@@ -39,6 +39,11 @@ struct app_params {
 
     uint64_t prng_seed;
     uint64_t prng_state;
+
+    unsigned int num_buffers;
+    unsigned int num_xfers;
+    unsigned int buf_size; // In samples
+    unsigned int timeout_ms;
 };
 
 #endif

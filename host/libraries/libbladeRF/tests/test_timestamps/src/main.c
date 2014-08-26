@@ -113,6 +113,12 @@ static void init_app_params(struct app_params *p)
     memset(p, 0, sizeof(p[0]));
     p->samplerate = 1000000;
     p->prng_seed = 1;
+
+    /* TODO Make sync params configurable */
+    p->num_buffers = 16;
+    p->num_xfers = 8;
+    p->buf_size = 64 * 1024;
+    p->timeout_ms = 2000;
 }
 
 static void deinit_app_params(struct app_params *p)
