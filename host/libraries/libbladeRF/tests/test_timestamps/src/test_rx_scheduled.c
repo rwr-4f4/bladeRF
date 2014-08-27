@@ -40,7 +40,9 @@ struct test_case {
 };
 
 static const struct test_case tests[] = {
-    { 2 * 1024, 1024, 2 },
+    /* Gap          Read Size       Iterations */
+    { 2 * 1024,         1,              1000 },
+    { 2 * 1024,         1024,           1000 },
 };
 
 static int run(struct bladerf *dev, struct app_params *p,

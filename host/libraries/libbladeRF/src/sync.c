@@ -416,6 +416,8 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                 switch (s->meta.state) {
                     case SYNC_META_STATE_GET_HEADER:
 
+                        assert(s->meta.msg_num < s->meta.msg_per_buf);
+
                         s->meta.curr_msg =
                             buf_src +
                             samples2bytes(s, dev->msg_size * s->meta.msg_num);
@@ -447,9 +449,11 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                                       (unsigned long long)s->meta.msg_timestamp);
 
                         } else {
-                            log_verbose("Got header for message %u, t=%u\n",
+                            log_verbose("Got header for message %u: "
+                                        "t_new=%u, t_old=%u\n",
                                         s->meta.msg_num,
-                                        s->meta.msg_timestamp);
+                                        s->meta.msg_timestamp,
+                                        s->meta.curr_timestamp);
                         }
 
                         s->meta.curr_timestamp = s->meta.msg_timestamp;
@@ -530,10 +534,12 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                             const unsigned int left_in_msg =
                                 s->meta.samples_per_msg - s->meta.curr_msg_off;
 
-                            const unsigned int left_in_buffer =
-                                samples_per_buffer -
-                                s->meta.samples_per_msg * (s->meta.msg_num) -
-                                s->meta.curr_msg_off;
+                            unsigned int left_in_buffer =
+                                s->meta.samples_per_msg *
+                                    (s->meta.msg_per_buf - s->meta.msg_num);
+
+                            /* Account for current position in buffer */
+                            left_in_buffer -= s->meta.curr_msg_off;
 
                             if (time_delta >= left_in_buffer) {
                                 /* Discard the remainder of this buffer */
