@@ -271,6 +271,8 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
     b = &s->buf_mgmt;
     samples_per_buffer = s->stream_config.samples_per_buffer;
 
+    log_verbose("%s: Requests %u samples.\n", __FUNCTION__, num_samples);
+
     while (!exit_early && samples_returned < num_samples && status == 0) {
 
         switch (s->state) {
@@ -337,6 +339,8 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                  * since we last queried the status */
                 if (b->status[b->cons_i] == SYNC_BUFFER_FULL) {
                     s->state = SYNC_STATE_BUFFER_READY;
+                    log_verbose("%s: buffer %u is ready to consume\n",
+                                __FUNCTION__, b->cons_i);
                 } else {
                     status = wait_for_buffer(b, timeout_ms,
                                              __FUNCTION__, b->cons_i);
@@ -346,6 +350,8 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                             s->state = SYNC_STATE_CHECK_WORKER;
                         } else {
                             s->state = SYNC_STATE_BUFFER_READY;
+                            log_verbose("%s: buffer %u is ready to consume\n",
+                                        __FUNCTION__, b->cons_i);
                         }
                     }
                 }
@@ -367,6 +373,7 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                     case BLADERF_FORMAT_SC16_Q11_META:
                         s->state = SYNC_STATE_USING_BUFFER_META;
                         s->meta.curr_msg_off = 0;
+                        s->meta.msg_num = 0;
                         break;
 
                     default:
