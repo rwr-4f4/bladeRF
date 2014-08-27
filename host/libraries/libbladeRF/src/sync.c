@@ -251,17 +251,21 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
     bool copied_data = false;
     unsigned int samples_returned = 0;
     uint8_t *samples_dest = (uint8_t*)samples;
-    uint8_t *buf_src;
-    unsigned int samples_to_copy;
-    unsigned int samples_per_buffer;
+    uint8_t *buf_src = NULL;
+    unsigned int samples_to_copy = 0;
+    unsigned int samples_per_buffer = 0;
+    uint64_t target_timestamp;
 
     if (s == NULL || samples == NULL) {
         log_debug("NULL pointer passed to %s\n", __FUNCTION__);
         return BLADERF_ERR_INVAL;
-    } else if (s->stream_config.format == BLADERF_FORMAT_SC16_Q11 &&
-               user_meta == NULL) {
-        log_debug("NULL metadata pointer passed to %s\n", __FUNCTION__);
-        return BLADERF_ERR_INVAL;
+    } else if (s->stream_config.format == BLADERF_FORMAT_SC16_Q11_META) {
+        if (user_meta == NULL) {
+            log_debug("NULL metadata pointer passed to %s\n", __FUNCTION__);
+            return BLADERF_ERR_INVAL;
+        } else {
+            target_timestamp = user_meta->timestamp;
+        }
     }
 
     b = &s->buf_mgmt;
@@ -443,6 +447,9 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                                       (unsigned long long)s->meta.msg_timestamp);
 
                         } else {
+                            log_verbose("Got header for message %u, t=%u\n",
+                                        s->meta.msg_num,
+                                        s->meta.msg_timestamp);
                         }
 
                         s->meta.curr_timestamp = s->meta.msg_timestamp;
@@ -450,18 +457,19 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                         break;
 
                     case SYNC_META_STATE_GET_SAMPLES:
-
-                        if ((user_meta->flags & BLADERF_META_FLAG_NOW) == 0 &&
-                            user_meta->timestamp < s->meta.curr_timestamp) {
+                        if (!copied_data &&
+                            (user_meta->flags & BLADERF_META_FLAG_NOW) == 0 &&
+                            target_timestamp < s->meta.curr_timestamp) {
 
                             log_debug("Current timestamp is %llu, "
-                                      "requested %llu\n",
+                                      "target=%llu (user=%llu)\n",
                                       (unsigned long long)s->meta.curr_timestamp,
+                                      (unsigned long long)target_timestamp,
                                       (unsigned long long)user_meta->timestamp);
 
                             status = BLADERF_ERR_TIME_PAST;
                         } else if ((user_meta->flags & BLADERF_META_FLAG_NOW) ||
-                                   user_meta->timestamp == s->meta.curr_timestamp) {
+                                   target_timestamp == s->meta.curr_timestamp) {
 
                             const unsigned int left_in_msg =
                                                     s->meta.samples_per_msg -
@@ -495,6 +503,10 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                             copied_data = true;
                             s->meta.curr_timestamp += samples_to_copy;
 
+                            /* We've begun copying samples, so our target will
+                             * just keep tracking the current timestamp. */
+                            target_timestamp = s->meta.curr_timestamp;
+
                             log_verbose("After copying samples, t=%llu\n",
                                         (unsigned long long)s->meta.curr_timestamp);
 
@@ -513,7 +525,7 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
 
                         } else {
                             const unsigned int time_delta =
-                                user_meta->timestamp - s->meta.curr_timestamp;
+                                target_timestamp - s->meta.curr_timestamp;
 
                             const unsigned int left_in_msg =
                                 s->meta.samples_per_msg - s->meta.curr_msg_off;
@@ -527,6 +539,8 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                                 /* Discard the remainder of this buffer */
                                 advance_rx_buffer(b);
                                 s->state = SYNC_STATE_WAIT_FOR_BUFFER;
+                                s->meta.state =
+                                    SYNC_META_STATE_GET_HEADER;
 
                                 log_verbose("%s: Discarding rest of buffer.\n",
                                             __FUNCTION__);
@@ -537,11 +551,17 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                                 s->meta.curr_timestamp += time_delta;
 
                                 log_verbose("%s: Seeking within message (t=%llu)\n",
-                                            s->meta.curr_timestamp,
-                                            __FUNCTION__);
+                                            __FUNCTION__,
+                                            s->meta.curr_timestamp);
                             } else {
-                                log_verbose("%s: Seeking within buffer.\n",
-                                            __FUNCTION__);
+                                s->meta.state =
+                                    SYNC_META_STATE_GET_HEADER;
+
+                                s->meta.msg_num +=
+                                    time_delta / s->meta.samples_per_msg;
+
+                                log_verbose("%s: Seeking to message %u.\n",
+                                            __FUNCTION__, s->meta.msg_num);
                             }
                         }
                         break;
