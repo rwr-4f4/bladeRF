@@ -42,13 +42,17 @@ struct test_case {
 };
 
 static const struct test_case tests[] = {
+#if 0
     { 1,    2000000 },
     { 2,    2000000 },
     { 128,  75000 },
     { 256,  50000 },
     { 512,  50000 },
     { 1023, 10000 },
+#endif
     { 1024, 10000 },
+
+#if 0
     { 1025, 10000 },
     { 2048, 5000 },
     { 3172, 5000 },
@@ -58,6 +62,7 @@ static const struct test_case tests[] = {
     { 32 * 1024, 1000 },
     { 64 * 1024, 1000 },
     { RANDOM_GAP_SIZE, 500 },
+#endif
 };
 
 static inline uint64_t get_gap(struct app_params *p, const struct test_case *t)
@@ -82,9 +87,10 @@ static inline uint64_t get_gap(struct app_params *p, const struct test_case *t)
 static int run(struct bladerf *dev, struct app_params *p,
                int16_t *samples, const struct test_case *t)
 {
-    int status;
+    int status, status_out;
     struct bladerf_metadata meta;
     uint64_t timestamp, gap;
+    uint32_t counter;
     unsigned int i;
     bool pass = true;
 
@@ -93,25 +99,13 @@ static int run(struct bladerf *dev, struct app_params *p,
     memset(&meta, 0, sizeof(meta));
     meta.flags = BLADERF_META_FLAG_NOW;
 
-    status = bladerf_sync_config(dev,
-                                 BLADERF_MODULE_RX,
-                                 BLADERF_FORMAT_SC16_Q11_META,
-                                 p->num_buffers,
-                                 p->buf_size,
-                                 p->num_xfers,
-                                 p->timeout_ms);
-
+    status = perform_sync_init(dev, BLADERF_MODULE_RX, p);
     if (status != 0) {
-        fprintf(stderr, "Failed to configure RX sync i/f: %s\n",
-                bladerf_strerror(status));
-        return status;
+        goto out;
     }
 
-    status = bladerf_enable_module(dev, BLADERF_MODULE_RX, true);
+    status = enable_counter_mode(dev, true);
     if (status != 0) {
-        fprintf(stderr, "Failed to enable RX module: %s\n",
-                bladerf_strerror(status));
-
         goto out;
     }
 
@@ -123,7 +117,7 @@ static int run(struct bladerf *dev, struct app_params *p,
     }
     printf("--------------------------------------------------------\n");
 
-    /* Initial read to get a starting timestamp */
+    /* Initial read to get a starting timestamp, and counter value */
     gap = get_gap(p, t);
     status = bladerf_sync_rx(dev, samples, gap, &meta, p->timeout_ms);
     if (status != 0) {
@@ -131,8 +125,14 @@ static int run(struct bladerf *dev, struct app_params *p,
         goto out;
     }
 
-    printf("Initial timestamp: 0x%016"PRIx64"\n", meta.timestamp);
-    printf("Initial status:    0x%08"PRIu32"\n", meta.status);
+    counter = extract_counter_val(samples);
+    if (!counter_data_is_valid(samples, gap, &counter)) {
+        pass = false;
+    }
+
+    printf("Initial timestamp:      0x%016"PRIx64"\n", meta.timestamp);
+    printf("Intital counter value:  0x%08"PRIx32"\n", counter);
+    printf("Initial status:         0x%08"PRIu32"\n", meta.status);
 
     for (i = 0; i < t->iterations && status == 0 && pass; i++) {
 
@@ -155,18 +155,27 @@ static int run(struct bladerf *dev, struct app_params *p,
 
         if (meta.status != 0) {
             pass = false;
-            fprintf(stderr, "Warning: status=0x%08"PRIu32"\n", meta.status);
+            fprintf(stderr, "Metadata status: 0x%08"PRIu32"\n", meta.status);
+        }
+
+        if (!counter_data_is_valid(samples, gap, &counter)) {
+            pass = false;
         }
     }
 
     printf("Test %s.\n", pass ? "passed" : "failed");
 
 out:
-    status = bladerf_enable_module(dev, BLADERF_MODULE_RX, false);
-    if (status != 0) {
+    status_out = bladerf_enable_module(dev, BLADERF_MODULE_RX, false);
+    if (status_out != 0) {
         fprintf(stderr, "Failed to disable RX module: %s\n",
                 bladerf_strerror(status));
     }
+
+    status = first_error(status, status_out);
+
+    status_out = enable_counter_mode(dev, false);
+    status = first_error(status, status_out);
 
     return status;
 }
