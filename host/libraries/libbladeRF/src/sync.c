@@ -33,10 +33,9 @@
 #include "minmax.h"
 #include "metadata.h"
 
-static inline size_t samples2bytes(struct bladerf_sync *s, unsigned int n) {
+static inline size_t samples2bytes(struct bladerf_sync *s, size_t n) {
     return s->stream_config.bytes_per_sample * n;
 }
-
 
 int sync_init(struct bladerf *dev,
               bladerf_module module,
@@ -493,7 +492,8 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
 
                             memcpy(samples_dest + samples2bytes(s, samples_returned),
                                    s->meta.curr_msg +
-                                    METADATA_HEADER_SIZE + s->meta.curr_msg_off,
+                                        METADATA_HEADER_SIZE +
+                                        samples2bytes(s, s->meta.curr_msg_off),
                                    samples2bytes(s, samples_to_copy));
 
                             samples_returned += samples_to_copy;

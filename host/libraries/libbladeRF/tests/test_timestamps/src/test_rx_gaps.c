@@ -42,17 +42,13 @@ struct test_case {
 };
 
 static const struct test_case tests[] = {
-#if 0
     { 1,    2000000 },
     { 2,    2000000 },
     { 128,  75000 },
     { 256,  50000 },
     { 512,  50000 },
     { 1023, 10000 },
-#endif
     { 1024, 10000 },
-
-#if 0
     { 1025, 10000 },
     { 2048, 5000 },
     { 3172, 5000 },
@@ -62,7 +58,6 @@ static const struct test_case tests[] = {
     { 32 * 1024, 1000 },
     { 64 * 1024, 1000 },
     { RANDOM_GAP_SIZE, 500 },
-#endif
 };
 
 static inline uint64_t get_gap(struct app_params *p, const struct test_case *t)
@@ -99,12 +94,12 @@ static int run(struct bladerf *dev, struct app_params *p,
     memset(&meta, 0, sizeof(meta));
     meta.flags = BLADERF_META_FLAG_NOW;
 
-    status = perform_sync_init(dev, BLADERF_MODULE_RX, p);
+    status = enable_counter_mode(dev, true);
     if (status != 0) {
         goto out;
     }
 
-    status = enable_counter_mode(dev, true);
+    status = perform_sync_init(dev, BLADERF_MODULE_RX, p);
     if (status != 0) {
         goto out;
     }
