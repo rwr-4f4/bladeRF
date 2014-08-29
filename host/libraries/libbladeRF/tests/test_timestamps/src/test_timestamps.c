@@ -82,19 +82,17 @@ int enable_counter_mode(struct bladerf *dev, bool enable)
     return status;
 }
 
-bool counter_data_is_valid(int16_t *samples, size_t n_samples, uint32_t *ctr)
+bool counter_data_is_valid(int16_t *samples, size_t n_samples, uint32_t ctr)
 {
     size_t i;
 
-    for (i = 0; i < 2 * n_samples; i += 2) {
+    for (i = 0; i < 2 * n_samples; i += 2, ctr++) {
         const uint32_t val = extract_counter_val(&samples[i]);
-        if (val != *ctr) {
+        if (val != ctr) {
             fprintf(stderr, "Invalid counter value @ sample %llu. "
                     "Expected 0x%"PRIx32", got 0x%"PRIx32"\n",
-                    (unsigned long long) i, *ctr, val);
+                    (unsigned long long) i, ctr, val);
             return false;
-        } else {
-            *ctr += 1;
         }
     }
 

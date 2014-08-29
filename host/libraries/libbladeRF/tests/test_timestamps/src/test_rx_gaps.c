@@ -76,6 +76,7 @@ static inline uint64_t get_gap(struct app_params *p, const struct test_case *t)
     }
 
     assert(gap <= p->buf_size);
+
     return gap;
 }
 
@@ -121,8 +122,10 @@ static int run(struct bladerf *dev, struct app_params *p,
     }
 
     counter = extract_counter_val(samples);
-    if (!counter_data_is_valid(samples, gap, &counter)) {
+    if (!counter_data_is_valid(samples, gap, counter)) {
         pass = false;
+    } else {
+        counter += gap;
     }
 
     printf("Initial timestamp:      0x%016"PRIx64"\n", meta.timestamp);
@@ -153,8 +156,10 @@ static int run(struct bladerf *dev, struct app_params *p,
             fprintf(stderr, "Metadata status: 0x%08"PRIu32"\n", meta.status);
         }
 
-        if (!counter_data_is_valid(samples, gap, &counter)) {
+        if (!counter_data_is_valid(samples, gap, counter)) {
             pass = false;
+        } else {
+            counter += gap;
         }
     }
 

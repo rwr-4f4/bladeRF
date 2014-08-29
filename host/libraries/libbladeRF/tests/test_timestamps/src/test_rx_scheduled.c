@@ -72,38 +72,29 @@ static const struct test_case tests[] = {
 static int run(struct bladerf *dev, struct app_params *p,
                int16_t *samples, const struct test_case *t)
 {
-    int status;
+    int status, status_out;
     struct bladerf_metadata meta;
     unsigned int i;
+    uint32_t counter;
     bool pass = true;
 
     memset(&meta, 0, sizeof(meta));
 
-    status = bladerf_sync_config(dev,
-                                 BLADERF_MODULE_RX,
-                                 BLADERF_FORMAT_SC16_Q11_META,
-                                 p->num_buffers,
-                                 p->buf_size,
-                                 p->num_xfers,
-                                 p->timeout_ms);
-
+    status = enable_counter_mode(dev, true);
     if (status != 0) {
-        fprintf(stderr, "Failed to configure RX sync i/f: %s\n",
-                bladerf_strerror(status));
-        return status;
+        goto out;
     }
 
-    status = bladerf_enable_module(dev, BLADERF_MODULE_RX, true);
+    status = perform_sync_init(dev, BLADERF_MODULE_RX, p);
     if (status != 0) {
-        fprintf(stderr, "Failed to enable RX module: %s\n",
-                bladerf_strerror(status));
-
         goto out;
     }
 
     printf("\nTest case: Gap=%"PRIu64" samples, Read size=%u, %u iterations\n",
            t->gap, t->read_size, t->iterations);
     printf("--------------------------------------------------------\n");
+
+    counter = t->gap - 1;
 
     for (i = 0; i < t->iterations && status == 0 && pass; i++) {
         assert(t->gap >= t->read_size);
@@ -112,21 +103,30 @@ static int run(struct bladerf *dev, struct app_params *p,
 
         status = bladerf_sync_rx(dev, samples, t->read_size,
                                  &meta, p->timeout_ms);
-
         if (status != 0) {
             fprintf(stderr, "RX %u failed: %s\n", i, bladerf_strerror(status));
             pass = false;
+        }
+
+        if (!counter_data_is_valid(samples, t->read_size, counter)) {
+            pass = false;
+        } else {
+            counter += t->gap;
         }
     }
 
     printf("Test %s.\n", pass ? "passed" : "failed");
 
 out:
-    status = bladerf_enable_module(dev, BLADERF_MODULE_RX, false);
-    if (status != 0) {
+    status_out = bladerf_enable_module(dev, BLADERF_MODULE_RX, false);
+    if (status_out != 0) {
         fprintf(stderr, "Failed to disable RX module: %s\n",
                 bladerf_strerror(status));
     }
+    status = first_error(status, status_out);
+
+    status_out = enable_counter_mode(dev, false);
+    status = first_error(status, status_out);
 
     return status;
 }

@@ -75,13 +75,12 @@ int enable_counter_mode(struct bladerf *dev, bool enable);
  *
  * @param[in]       samples     Sample buffer
  * @param[in]       n_samples   Size of `samples`, in units of samples
- * @param[inout]    ctr         Pointer to expected counter value.
- *                              This function uses it to start, and updates it
- *                              based upon the last sample value.
+ * @param[in]       ctr         Expected counter value for the start of
+ *                              the provided sample block
  *
  * @return true if valid, false otherwise
  */
-bool counter_data_is_valid(int16_t *samples, size_t n_samples, uint32_t *ctr);
+bool counter_data_is_valid(int16_t *samples, size_t n_samples, uint32_t ctr);
 
 /**
  * Get the earlier of two error codes
