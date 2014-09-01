@@ -48,8 +48,8 @@ typedef enum {
 } sync_buffer_status;
 
 typedef enum {
-    SYNC_META_STATE_GET_HEADER,       /**< Extract the metadata header */
-    SYNC_META_STATE_GET_SAMPLES,      /**< Consume samples */
+    SYNC_META_STATE_HEADER,       /**< Extract the metadata header */
+    SYNC_META_STATE_SAMPLES,      /**< Process samples */
 } sync_meta_state;
 
 struct buffer_mgmt {
@@ -96,8 +96,18 @@ struct sync_meta
                                    * Range is: 0 to msg_per_buf   */
     unsigned int samples_per_msg; /* Number of samples within a message */
 
-    uint64_t msg_timestamp; /* Timestamp contained in the current message */
-    uint32_t msg_flags;     /* Flags for the current message */
+    union {
+        /* Used only for RX */
+        struct {
+            uint64_t msg_timestamp; /* Timestamp contained in the current message */
+            uint32_t msg_flags;     /* Flags for the current message */
+        };
+
+        /* Used only for TX */
+        struct {
+            bool in_burst;
+        };
+    };
 
     uint64_t curr_timestamp;    /* Timestamp at the sample we've
                                  * consumed up to */
