@@ -48,10 +48,12 @@ struct test {
 
 DECLARE_TEST(rx_gaps);
 DECLARE_TEST(rx_scheduled);
+DECLARE_TEST(tx_onoff);
 
 static const struct test *tests[] = {
     TEST(rx_gaps),
     TEST(rx_scheduled),
+    TEST(tx_onoff),
 };
 
 
@@ -101,6 +103,8 @@ static void usage(const char *argv0)
     printf("    -t, --test <name>         Test name to run. Options are:\n");
     printf("         rx_gaps              Check for unexpected gaps in samples.\n");
     printf("         rx_scheduled         Perform reads at specific timestamps.\n");
+    printf("         tx_onoff             Transmits ON-OFF bursts.\n");
+    printf("                                Requires external verification.\n");
     printf("\n");
     printf("    -S, --seed <value>        Seed to use for PRNG-based test cases.\n");
     printf("\n");
