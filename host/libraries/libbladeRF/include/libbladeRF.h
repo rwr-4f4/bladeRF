@@ -1210,6 +1210,9 @@ typedef enum {
 
 /*
  * Metadata status bits
+ *
+ * These are used in conjunction with the bladerf_metadata structure's
+ * `status` field.
  */
 
 /**
@@ -1230,27 +1233,29 @@ typedef enum {
 
 /*
  * Metadata flags
- */
-
-/**
- * Mark the associated buffer as the start of a burst transfer
- */
-#define BLADERF_META_FLAG_BURST_START   (1 << 0)
-
-/**
- * Mark the associated buffer as the end of a burst transfer
- */
-#define BLADERF_META_FLAG_BURST_END     (1 << 1)
-
-/**
- * For RX, this requests that any available samples be provided with
- * metadata, and causes the bladerf_sync_rx() function to update the
- * bladerf_metadata `timestamp` field with the time of the first sample
- * returned in the buffer.
  *
- * For TX, this TODO
+ * These are used in conjunction with the bladerf_metadata structure's
+ * `flags` field.
  */
-#define BLADERF_META_FLAG_NOW           (1 << 31)
+
+/**
+ * Mark the associated buffer as the start of a burst transmission.
+ * This is only used for the bladerf_sync_tx() call.
+ */
+#define BLADERF_META_FLAG_TX_BURST_START   (1 << 0)
+
+/**
+ * Mark the associated buffer as the end of a burst transmission.
+ * This is only used for the bladerf_sync_tx() call.
+ */
+#define BLADERF_META_FLAG_TX_BURST_END     (1 << 1)
+
+/**
+ * This flag indicates that calls to bladerf_sync_rx should return any available
+ * samples, rather than wait until the timestamp indicated in the
+ * bladerf_metadata timestamp field.
+ */
+#define BLADERF_META_FLAG_RX_NOW           (1 << 31)
 
 /**
  * Sample metadata

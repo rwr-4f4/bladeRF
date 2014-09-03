@@ -31,7 +31,9 @@
 #include "test_timestamps.h"
 
 /* This test requires external verification via a spectrum analyzer.
- * It simply transmits ON/OFF bursts */
+ * It simply transmits ON/OFF bursts, and is more intended to ensure the API
+ * functions aren't bombing out than it is to exercise signal integrity/timing.
+ */
 
 #define MAGNITUDE 2000
 

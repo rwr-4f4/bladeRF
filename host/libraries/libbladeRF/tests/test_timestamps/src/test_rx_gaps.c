@@ -93,7 +93,7 @@ static int run(struct bladerf *dev, struct app_params *p,
     /* Clear out metadata and request that we just received any available
      * samples, with the timestamp filled in for us */
     memset(&meta, 0, sizeof(meta));
-    meta.flags = BLADERF_META_FLAG_NOW;
+    meta.flags = BLADERF_META_FLAG_RX_NOW;
 
     status = enable_counter_mode(dev, true);
     if (status != 0) {

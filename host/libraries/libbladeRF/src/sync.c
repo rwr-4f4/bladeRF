@@ -481,7 +481,7 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
 
                     case SYNC_META_STATE_SAMPLES:
                         if (!copied_data &&
-                            (user_meta->flags & BLADERF_META_FLAG_NOW) == 0 &&
+                            (user_meta->flags & BLADERF_META_FLAG_RX_NOW) == 0 &&
                             target_timestamp < s->meta.curr_timestamp) {
 
                             log_debug("Current timestamp is %llu, "
@@ -491,7 +491,7 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                                       (unsigned long long)user_meta->timestamp);
 
                             status = BLADERF_ERR_TIME_PAST;
-                        } else if ((user_meta->flags & BLADERF_META_FLAG_NOW) ||
+                        } else if ((user_meta->flags & BLADERF_META_FLAG_RX_NOW) ||
                                    target_timestamp == s->meta.curr_timestamp) {
 
                             /* Copy the request amount up to the end of a
@@ -510,7 +510,7 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                             s->meta.curr_msg_off += samples_to_copy;
 
                             if (!copied_data &&
-                                (user_meta->flags & BLADERF_META_FLAG_NOW)) {
+                                (user_meta->flags & BLADERF_META_FLAG_RX_NOW)) {
 
                                 /* Provide the user with the timestamp at the
                                  * first returned sample when the
@@ -659,15 +659,15 @@ int sync_tx(struct bladerf *dev, void *samples, unsigned int num_samples,
         }
 
         if (s->meta.in_burst) {
-            if (user_meta->flags & BLADERF_META_FLAG_BURST_START) {
+            if (user_meta->flags & BLADERF_META_FLAG_TX_BURST_START) {
                 log_debug("%s: BURST_START provided while already in a burst.\n",
                           __FUNCTION__);
                 return BLADERF_ERR_INVAL;
-            } else if (user_meta->flags & BLADERF_META_FLAG_BURST_END) {
+            } else if (user_meta->flags & BLADERF_META_FLAG_TX_BURST_END) {
                 flush = true;
             }
         } else {
-            if (user_meta->flags & BLADERF_META_FLAG_BURST_START) {
+            if (user_meta->flags & BLADERF_META_FLAG_TX_BURST_START) {
                 if (user_meta->timestamp < s->meta.curr_timestamp) {
                     log_debug("Provided timestamp=%llu is in past: "
                               "current=%llu\n",
@@ -679,7 +679,7 @@ int sync_tx(struct bladerf *dev, void *samples, unsigned int num_samples,
                     s->meta.in_burst = true;
                     s->meta.curr_timestamp = user_meta->timestamp;
                 }
-            } else if (user_meta->flags & BLADERF_META_FLAG_BURST_END) {
+            } else if (user_meta->flags & BLADERF_META_FLAG_TX_BURST_END) {
                 log_debug("%s: BURST_END provided while not in a burst.\n",
                           __FUNCTION__);
                 return BLADERF_ERR_INVAL;
