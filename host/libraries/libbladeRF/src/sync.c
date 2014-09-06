@@ -444,9 +444,6 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                         s->meta.msg_timestamp =
                             metadata_get_timestamp(s->meta.curr_msg);
 
-                        // FIXME This needs to get moved into the FPGA
-                        s->meta.msg_timestamp /= 2;
-
                         s->meta.msg_flags =
                             metadata_get_flags(s->meta.curr_msg);
 

@@ -88,7 +88,13 @@ static inline uint64_t metadata_get_timestamp(const uint8_t *header)
    uint64_t ret;
    assert(sizeof(ret) == METADATA_TIMESTAMP_SIZE);
    memcpy(&ret, &header[METADATA_TIMESTAMP_OFFSET], METADATA_TIMESTAMP_SIZE);
-   return LE64_TO_HOST(ret);
+
+   ret = LE64_TO_HOST(ret);
+
+   // FIXME This needs to get moved into the FPGA
+   ret /= 2;
+
+   return ret;
 }
 
 static inline uint64_t metadata_get_flags(const uint8_t *header)
