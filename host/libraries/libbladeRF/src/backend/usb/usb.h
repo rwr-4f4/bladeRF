@@ -55,8 +55,8 @@
 #endif
 
 /* Size of a host<->FPGA message in BYTES */
-#define USB_MSG_SIZE_SS    512
-#define USB_MSG_SIZE_HS    256
+#define USB_MSG_SIZE_SS    2048
+#define USB_MSG_SIZE_HS    1024
 
 typedef enum {
     USB_TARGET_DEVICE,

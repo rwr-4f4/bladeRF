@@ -131,9 +131,9 @@ int sync_init(struct bladerf *dev,
     sync->stream_config.bytes_per_sample = bytes_per_sample;
 
     sync->meta.state = SYNC_META_STATE_HEADER;
-    sync->meta.msg_per_buf = buffer_size / dev->msg_size;
-    sync->meta.samples_per_msg = dev->msg_size -
-                                 (METADATA_HEADER_SIZE / bytes_per_sample);
+    sync->meta.msg_per_buf = buffer_size / (dev->msg_size / bytes_per_sample);
+    sync->meta.samples_per_msg =
+        (dev->msg_size - METADATA_HEADER_SIZE) / bytes_per_sample;
 
 
     MUTEX_INIT(&sync->buf_mgmt.lock);
@@ -429,20 +429,15 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
             case SYNC_STATE_USING_BUFFER_META: /* SC16Q11 buffers w/ metadata */
                 MUTEX_LOCK(&b->lock);
 
-                // FIXME move into SYNC_META_STATE_HEADER case
-                buf_src = (uint8_t*)b->buffers[b->cons_i];
-
                 switch (s->meta.state) {
                     case SYNC_META_STATE_HEADER:
 
                         assert(s->meta.msg_num < s->meta.msg_per_buf);
 
-                        /* FIXME This is off by a factor of 4
-                         * samples2bytes() should not be used because
-                         * dev->msg_size is in BYTES not samples! */
+                        buf_src = (uint8_t*)b->buffers[b->cons_i];
+
                         s->meta.curr_msg =
-                            buf_src +
-                            samples2bytes(s, dev->msg_size * s->meta.msg_num);
+                            buf_src + dev->msg_size * s->meta.msg_num;
 
                         s->meta.msg_timestamp =
                             metadata_get_timestamp(s->meta.curr_msg);
