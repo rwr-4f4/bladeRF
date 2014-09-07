@@ -531,8 +531,7 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                             log_verbose("After copying samples, t=%llu\n",
                                         (unsigned long long)s->meta.curr_timestamp);
 
-                            // FIXME use left_in_msg(s) here
-                            if (s->meta.curr_msg_off >= s->meta.samples_per_msg) {
+                            if (left_in_msg(s) == 0) {
                                 assert(s->meta.curr_msg_off == s->meta.samples_per_msg);
 
                                 s->meta.state = SYNC_META_STATE_HEADER;

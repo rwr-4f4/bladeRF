@@ -47,7 +47,7 @@ struct test_case {
 };
 
 static const struct test_case tests[] = {
-    { 1000, 100000, 1 }
+    { 1000, 100000, 8 }
 #if 0
     { 100000, 50000,  10},
     { 100000, 25000,  10 },
