@@ -834,8 +834,8 @@ int sync_tx(struct bladerf *dev, void *samples, unsigned int num_samples,
                              * message within the buffer */
                             memcpy(s->meta.curr_msg + METADATA_HEADER_SIZE +
                                         samples2bytes(s, s->meta.curr_msg_off),
-                                   samples + samples_written,
-                                   samples_to_copy);
+                                   samples + samples2bytes(s, samples_written),
+                                   samples2bytes(s, samples_to_copy));
 
                             s->meta.curr_msg_off += samples_to_copy;
                             s->meta.curr_timestamp += samples_to_copy;
