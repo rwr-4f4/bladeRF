@@ -54,7 +54,7 @@
 #   define BULK_TIMEOUT_MS  1000
 #endif
 
-/* Size of a host<->FPGA message in samples */
+/* Size of a host<->FPGA message in BYTES */
 #define USB_MSG_SIZE_SS    512
 #define USB_MSG_SIZE_HS    256
 

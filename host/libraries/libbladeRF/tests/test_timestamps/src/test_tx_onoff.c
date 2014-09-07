@@ -47,7 +47,7 @@ struct test_case {
 };
 
 static const struct test_case tests[] = {
-    { 100000, 100000, 10 },
+    { 1000, 100000, 1 }
 #if 0
     { 100000, 50000,  10},
     { 100000, 25000,  10 },
@@ -93,18 +93,21 @@ static int run(struct bladerf *dev, struct app_params *p,
         fprintf(stderr, "Failed to get timestamp: %s\n",
                 bladerf_strerror(status));
         goto out;
+    } else {
+        printf("Initial timestamp: 0x%016"PRIx64"\n", timestamp);
     }
+
+    timestamp += 200000;
 
 
     for (i = 0; i < t->iterations && status == 0; i++) {
-        timestamp += samples_off;
         meta.timestamp = timestamp;
         meta.flags = BLADERF_META_FLAG_TX_BURST_START;
         samples_left = samples_on;
 
         while (samples_left && status == 0) {
             unsigned int to_send = uint_min(p->buf_size, samples_left);
-            if (to_send <= p->buf_size) {
+            if (to_send == samples_left) {
                 meta.flags |= BLADERF_META_FLAG_TX_BURST_END;
             } else {
                 meta.flags &= ~BLADERF_META_FLAG_TX_BURST_END;
@@ -116,8 +119,10 @@ static int run(struct bladerf *dev, struct app_params *p,
             }
 
             meta.flags &= ~BLADERF_META_FLAG_TX_BURST_START;
+            samples_left -= to_send;
         }
 
+        timestamp += (samples_off + samples_on);
     }
 
 out:

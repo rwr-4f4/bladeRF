@@ -187,6 +187,8 @@ int async_submit_stream_buffer(struct bladerf_stream *stream,
 
             if (status == ETIMEDOUT) {
                 status = BLADERF_ERR_TIMEOUT;
+                log_debug("%s: %u ms timeout expired",
+                          __FUNCTION__, timeout_ms);
                 goto error;
             } else if (status != 0) {
                 status = BLADERF_ERR_UNEXPECTED;

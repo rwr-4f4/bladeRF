@@ -33,7 +33,7 @@
  *       +-----------------+
  *  0x04 |    Timestamp    |    8 bytes, Little-endian uint64_t
  *       +-----------------+
- *  0x0c |      Flag       |    4 bytes, Little-endian uint32_t
+ *  0x0c |      Flags      |    4 bytes, Little-endian uint32_t
  *       +-----------------+
  *
  * The term "buffer" is used to describe a block of of data received from or
@@ -108,11 +108,17 @@ static inline uint64_t metadata_get_flags(const uint8_t *header)
 static inline void metadata_set(uint8_t *header,
                                 uint64_t timestamp, uint32_t flags)
 {
+    // FIXME this should be done in the FPGA
+    timestamp *= 2;
+
     timestamp = HOST_TO_LE64(timestamp);
+
     flags = HOST_TO_LE32(flags);
 
     assert(sizeof(timestamp) == METADATA_TIMESTAMP_SIZE);
     assert(sizeof(flags) == METADATA_FLAGS_SIZE);
+
+    memset(&header[METADATA_RESV_OFFSET], 0, METADATA_RESV_SIZE);
 
     memcpy(&header[METADATA_TIMESTAMP_OFFSET],
            &timestamp,
