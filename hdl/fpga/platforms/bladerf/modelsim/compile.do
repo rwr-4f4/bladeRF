@@ -4,6 +4,7 @@ vcom -work nuand -2008 ../../../ip/nuand/simulation/util.vhd
 vcom -work nuand -2008 ../../../ip/nuand/simulation/fx3_model.vhd
 vcom -work nuand -2008 ../../../ip/nuand/simulation/lms6002d_model.vhd
 
+vcom -work nuand -2008 ../../../ip/nuand/synthesis/handshake.vhd
 vcom -work nuand -2008 ../../../ip/nuand/synthesis/fifo_reader.vhd
 vcom -work nuand -2008 ../../../ip/nuand/synthesis/fifo_writer.vhd
 vcom -work nuand -2008 ../../../ip/nuand/synthesis/synchronizer.vhd
@@ -15,6 +16,7 @@ vcom -work nuand -2008 ../../../ip/nuand/synthesis/lms6002d/vhdl/lms6002d.vhd
 vcom -work nuand -2008 ../../../ip/nuand/synthesis/tan_table.vhd
 vcom -work nuand -2008 ../../../ip/nuand/synthesis/iq_correction.vhd
 
+vcom -work nuand -2008 ../../../ip/altera/fx3_pll/fx3_pll.vhd
 vcom -work nuand -2008 ../../../ip/altera/pll/pll.vhd
 vcom -work nuand -2008 ../../../ip/altera/rx_fifo/rx_fifo.vhd
 vcom -work nuand -2008 ../../../ip/altera/tx_fifo/tx_fifo.vhd

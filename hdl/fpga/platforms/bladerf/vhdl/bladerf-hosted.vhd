@@ -776,26 +776,23 @@ begin
         time_tamer_synchronize => timestamp_sync
       ) ;
 
-    xb_gpio_direction_proc : for i in 0 to 31 generate
-        process(xb_gpio_dir, nios_xb_gpio_out, nios_xb_gpio_in, xb_mode, nios_ss_n)
-        begin
+    assign_exp_gpio : process(all)
+    begin
+        nios_xb_gpio_in(0) <= exp_clock_in ;
+        for i in 0 to 31 loop
             if (xb_gpio_dir(i) = '1') then
                 nios_xb_gpio_in(i) <= nios_xb_gpio_out(i);
-                if (xb_mode = "10" and i + 1 = 2) then
+                if (xb_mode = "10") then
                     exp_gpio(i+1) <= nios_ss_n(1);
-                elsif (i + 1 /= 1) then
+                else
                     exp_gpio(i+1) <= nios_xb_gpio_out(i);
                 end if;
             else
-                if (i + 1 = 1) then
-                    nios_xb_gpio_in(i) <= exp_clock_in;
-                else
-                    nios_xb_gpio_in(i) <= exp_gpio(i + 1);
-                    exp_gpio(i + 1) <= 'Z';
-                end if;
+                nios_xb_gpio_in(i) <= exp_gpio(i + 1);
+                exp_gpio(i + 1) <= 'Z';
             end if;
-        end process;
-    end generate ;
+        end loop ;
+    end process;
 
     nios_gpio(20 downto 19) <= nios_ss_n;
     nios_gpio(22 downto 21) <= xb_mode;
