@@ -72,7 +72,7 @@ static int run(struct bladerf *dev, struct app_params *p,
 
     memset(&meta, 0, sizeof(meta));
 
-    status = perform_sync_init(dev, BLADERF_MODULE_TX, 1024, p);
+    status = perform_sync_init(dev, BLADERF_MODULE_TX, t->buf_len, p);
     if (status != 0) {
         goto out;
     }
@@ -93,8 +93,11 @@ static int run(struct bladerf *dev, struct app_params *p,
         meta.flags = BLADERF_META_FLAG_TX_BURST_START;
         samples_left = t->burst_len;
 
+        printf("Sending burst @ %llu\n", (unsigned long long) meta.timestamp);
+
         while (samples_left && status == 0) {
             unsigned int to_send = uint_min(p->buf_size, samples_left);
+
             if (to_send == samples_left) {
                 meta.flags |= BLADERF_META_FLAG_TX_BURST_END;
             } else {
@@ -103,7 +106,8 @@ static int run(struct bladerf *dev, struct app_params *p,
 
             status = bladerf_sync_tx(dev, buf, to_send, &meta, p->timeout_ms);
             if (status != 0) {
-                fprintf(stderr, "TX failed: %s\n", bladerf_strerror(status));
+                fprintf(stderr, "TX failed @ iteration (%u) %s\n",
+                        (unsigned int )i, bladerf_strerror(status));
             }
 
             meta.flags &= ~BLADERF_META_FLAG_TX_BURST_START;
@@ -112,6 +116,8 @@ static int run(struct bladerf *dev, struct app_params *p,
 
         meta.timestamp += (t->burst_len + t->gap_len);
     }
+
+    printf("Waiting for samples to finish...\n");
 
     /* Wait for samples to be transmitted before shutting down the TX module */
     // FIXME get_timestamp doesn't work
