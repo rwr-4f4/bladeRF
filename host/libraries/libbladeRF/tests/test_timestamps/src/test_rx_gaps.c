@@ -100,7 +100,7 @@ static int run(struct bladerf *dev, struct app_params *p,
         goto out;
     }
 
-    status = perform_sync_init(dev, BLADERF_MODULE_RX, p);
+    status = perform_sync_init(dev, BLADERF_MODULE_RX, 0, p);
     if (status != 0) {
         goto out;
     }

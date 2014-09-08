@@ -41,22 +41,23 @@
 #define MAGNITUDE 2000
 
 struct test_case {
-    unsigned int usec_on;
-    unsigned int usec_off;
+    unsigned int buf_len;
+    unsigned int burst_len;     /* Length of a burst, in samples */
+    unsigned int gap_len;       /* Gap between bursts, in samples */
     unsigned int iterations;
 };
 
 static const struct test_case tests[] = {
-    { 1000, 100000, 8 }
+    { 1024, 1000,   2000, 8 },
 #if 0
-    { 100000, 50000,  10},
-    { 100000, 25000,  10 },
-    { 100000, 1000,   10 },
+    { 1024, 100000, 50000,  10 },
+    { 1024, 100000, 25000,  10 },
+    { 1024, 100000, 1000,   10 },
 
-    { 100000, 10000,  10 },
-    { 50000,  10000,  10 },
-    { 25000,  10000,  10 },
-    { 1000,   10000,  10 },
+    { 1024, 100000, 10000,  10 },
+    { 1024, 50000,  10000,  10 },
+    { 1024, 25000,  10000,  10 },
+    { 1024, 1000,   10000,  10 },
 #endif
 };
 
@@ -65,45 +66,32 @@ static int run(struct bladerf *dev, struct app_params *p,
 {
     int status, status_out;
     unsigned int samples_left;
-    uint64_t timestamp, samples_on, samples_off;
     size_t i;
     struct bladerf_metadata meta;
 
-    if (p->samplerate < 1000000) {
-        fprintf(stderr, "Sample rate is too low for this test.\n");
-        return -1;
-    }
-
-    samples_on  = t->usec_on * (p->samplerate / 1000000);
-    samples_off = t->usec_off * (p->samplerate / 1000000);
 
     memset(&meta, 0, sizeof(meta));
 
-    /* Try to keep these within 32-bit boundaries, please */
-    assert(samples_on <= UINT_MAX);
-    assert(samples_off <= UINT_MAX);
-
-    status = perform_sync_init(dev, BLADERF_MODULE_TX, p);
+    status = perform_sync_init(dev, BLADERF_MODULE_TX, 1024, p);
     if (status != 0) {
         goto out;
     }
 
-    status = bladerf_get_timestamp(dev, BLADERF_MODULE_TX, &timestamp);
+    status = bladerf_get_timestamp(dev, BLADERF_MODULE_TX, &meta.timestamp);
     if (status != 0) {
         fprintf(stderr, "Failed to get timestamp: %s\n",
                 bladerf_strerror(status));
         goto out;
     } else {
-        printf("Initial timestamp: 0x%016"PRIx64"\n", timestamp);
+        printf("Initial timestamp: 0x%016"PRIx64"\n", meta.timestamp);
     }
 
-    timestamp += 200000;
+    meta.timestamp += 200000;
 
 
     for (i = 0; i < t->iterations && status == 0; i++) {
-        meta.timestamp = timestamp;
         meta.flags = BLADERF_META_FLAG_TX_BURST_START;
-        samples_left = samples_on;
+        samples_left = t->burst_len;
 
         while (samples_left && status == 0) {
             unsigned int to_send = uint_min(p->buf_size, samples_left);
@@ -122,8 +110,22 @@ static int run(struct bladerf *dev, struct app_params *p,
             samples_left -= to_send;
         }
 
-        timestamp += (samples_off + samples_on);
+        meta.timestamp += (t->burst_len + t->gap_len);
     }
+
+    /* Wait for samples to be transmitted before shutting down the TX module */
+    // FIXME get_timestamp doesn't work
+#if 0
+    timestamp_now = 0;
+    while (status == 0 && timestamp_now < meta.timestamp) {
+        status = bladerf_get_timestamp(dev, BLADERF_MODULE_TX, &timestamp_now);
+        usleep(1000000);
+        printf("Waiting for TX to be done: 0x%"PRIx64" 0x%"PRIx64"\n",
+                meta.timestamp, timestamp_now);
+    }
+#else
+    usleep(2000000);
+#endif
 
 out:
     status_out = bladerf_enable_module(dev, BLADERF_MODULE_TX, false);

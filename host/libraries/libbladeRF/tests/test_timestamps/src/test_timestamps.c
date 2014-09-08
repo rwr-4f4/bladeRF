@@ -28,15 +28,19 @@
 #include "test_timestamps.h"
 
 int perform_sync_init(struct bladerf *dev, bladerf_module module,
-                      struct app_params *p)
+                      unsigned int buf_size, struct app_params *p)
 {
     int status;
+
+    if (buf_size == 0) {
+        buf_size = p->buf_size;
+    }
 
     status = bladerf_sync_config(dev,
                                  module,
                                  BLADERF_FORMAT_SC16_Q11_META,
                                  p->num_buffers,
-                                 p->buf_size,
+                                 buf_size,
                                  p->num_xfers,
                                  p->timeout_ms);
 

@@ -52,12 +52,14 @@ struct app_params {
  *
  * @param   dev             Device handle
  * @param   module          Module to initialize
+ * @param   buf_size        Size of buffer to use. If 0, this value will
+ *                          be extracted from the application parameters.
  * @param   p               Application parameters
  *
  * @return 0 on success, non-zero on failure
  */
 int perform_sync_init(struct bladerf *dev, bladerf_module module,
-                      struct app_params *p);
+                      unsigned int buf_size, struct app_params *p);
 
 /**
  * Enable/disable the FPGA's counter mode
