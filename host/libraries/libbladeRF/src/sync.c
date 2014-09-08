@@ -135,6 +135,14 @@ int sync_init(struct bladerf *dev,
     sync->meta.samples_per_msg =
         (dev->msg_size - METADATA_HEADER_SIZE) / bytes_per_sample;
 
+    log_verbose("%s: Buffer size: %u\n",
+                __FUNCTION__, buffer_size);
+
+    log_verbose("%s: Msg per buffer: %u\n",
+                __FUNCTION__, sync->meta.msg_per_buf);
+
+    log_verbose("%s: Samples per msg: %u\n",
+                __FUNCTION__, sync->meta.samples_per_msg);
 
     MUTEX_INIT(&sync->buf_mgmt.lock);
     pthread_cond_init(&sync->buf_mgmt.buf_ready, NULL);
@@ -865,11 +873,13 @@ int sync_tx(struct bladerf *dev, void *samples, unsigned int num_samples,
                             memset(s->meta.curr_msg + off, 0,
                                    samples2bytes(s, to_zero));
 
+                            log_verbose("%s: Flushed %u samples @ %u (0x%08x)\n",
+                                        __FUNCTION__,
+                                        to_zero, s->meta.curr_msg_off, off);
+
                             s->meta.curr_msg_off += to_zero;
                             s->meta.curr_timestamp += to_zero;
 
-                            log_verbose("%s: Flushed %u samples.\n",
-                                        __FUNCTION__, to_zero);
                         }
 
                         if (left_in_msg(s) == 0) {
