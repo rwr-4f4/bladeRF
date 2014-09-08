@@ -899,10 +899,10 @@ int sync_tx(struct bladerf *dev, void *samples, unsigned int num_samples,
                             s->meta.msg_num = 0;
                             s->state = SYNC_STATE_WAIT_FOR_BUFFER;
 
-                            /* If the caller has ended a burst aligned on a
-                             * buffer boundary, we do not need to come back
-                             * around and flush anything. */
-                            flush = false;
+                            /* We want to clear the flush flag if we've written
+                             * all of our data, but keep it set if we have more
+                             * data and need wrap around to another buffer */
+                            flush = flush && (samples_written != num_samples);
                         }
 
                         break;
