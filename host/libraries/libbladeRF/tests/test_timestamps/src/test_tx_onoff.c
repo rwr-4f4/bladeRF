@@ -48,7 +48,7 @@ struct test_case {
 };
 
 static const struct test_case tests[] = {
-    { 1024, 1000,   2000, 8 },
+    { 1024, 1006,   2000, 8 },
 #if 0
     { 1024, 100000, 50000,  10 },
     { 1024, 100000, 25000,  10 },
@@ -104,7 +104,7 @@ static int run(struct bladerf *dev, struct app_params *p,
                 meta.flags &= ~BLADERF_META_FLAG_TX_BURST_END;
             }
 
-            status = bladerf_sync_tx(dev, buf, to_send, &meta, p->timeout_ms);
+            status = bladerf_sync_tx(dev, buf, to_send, &meta, 10000); //p->timeout_ms);
             if (status != 0) {
                 fprintf(stderr, "TX failed @ iteration (%u) %s\n",
                         (unsigned int )i, bladerf_strerror(status));
@@ -162,6 +162,7 @@ int test_fn_tx_onoff(struct bladerf *dev, struct app_params *p)
     }
 
     for (i = 0; i < ARRAY_SIZE(tests) && status == 0; i++) {
+        assert((tests[i].burst_len + tests[i].gap_len) >= tests[i].buf_len);
         status = run(dev, p, samples, &tests[i]);
     }
 
