@@ -15,6 +15,7 @@ set(SRC
     src/test_rx_gaps.c
     src/test_rx_scheduled.c
     src/test_tx_onoff.c
+    src/test_tx_gmsk_bursts.c
     ${BLADERF_HOST_COMMON_SOURCE_DIR}/conversions.c
 )
 
