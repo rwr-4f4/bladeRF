@@ -50,6 +50,9 @@ static int run(struct bladerf *dev, struct app_params *p,
     struct bladerf_metadata meta;
     unsigned int i;
     const unsigned int burst_len = (unsigned int) ARRAY_SIZE(gmsk_burst) / 2;
+    const unsigned int timeout_backup = p->timeout_ms;
+
+    p->timeout_ms = 5000000;
 
     memset(&meta, 0, sizeof(meta));
     meta.flags = BLADERF_META_FLAG_TX_BURST_START |
@@ -85,6 +88,7 @@ out:
     status_out = bladerf_enable_module(dev, BLADERF_MODULE_TX, false);
     status = first_error(status, status_out);
 
+    p->timeout_ms = timeout_backup;
     return status;
 }
 
