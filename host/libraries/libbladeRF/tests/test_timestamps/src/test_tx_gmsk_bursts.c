@@ -36,29 +36,210 @@
 #include "test_timestamps.h"
 #include "gmsk_burst.h"
 
-static const struct test_case {
-    unsigned int buf_len;
-    unsigned int iterations;
-} tests[] = {
-    { 2048, 1000 },
+struct settings {
+    struct bladerf_rational_rate sample_rate;
+    unsigned int frequency, bandwidth, timeout_ms;
+    int txvga1, txvga2;
 };
 
-static int run(struct bladerf *dev, struct app_params *p,
-               const struct test_case *t)
+static int backup_settings(struct bladerf *dev, struct app_params *p,
+                           struct settings *s)
+{
+    int status;
+
+    printf("\nBacking up device settings...\n");
+
+    s->timeout_ms = p->timeout_ms;
+    printf("  Stream timeout: %u ms\n", p->timeout_ms);
+
+    status = bladerf_get_frequency(dev, BLADERF_MODULE_TX, &s->frequency);
+    if (status != 0) {
+        fprintf(stderr, "Failed to get frequency: %s\n",
+                bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  Frequency: %u\n", s->frequency);
+    }
+
+
+    status = bladerf_get_rational_sample_rate(dev, BLADERF_MODULE_TX,
+                                              &s->sample_rate);
+    if (status != 0) {
+        fprintf(stderr, "Failed to get sample rate: %s\n",
+                bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  Samplerate %"PRIu64" %"PRIu64"/%"PRIu64"\n",
+               s->sample_rate.integer, s->sample_rate.num, s->sample_rate.den);
+    }
+
+    status = bladerf_get_bandwidth(dev, BLADERF_MODULE_TX, &s->bandwidth);
+    if (status != 0) {
+        fprintf(stderr, "Failed to get bandwidth: %s\n",
+                bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  Bandwidth: %u\n", s->bandwidth);
+    }
+
+    status = bladerf_get_txvga1(dev, &s->txvga1);
+    if (status != 0) {
+        fprintf(stderr, "Failed to get txvga1: %s\n", bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  TXVGA1: %d\n", s->txvga1);
+    }
+
+    status = bladerf_get_txvga2(dev, &s->txvga2);
+    if (status != 0) {
+        fprintf(stderr, "Failed to get txvga2: %s\n", bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  TXVGA2: %d\n", s->txvga2);
+    }
+
+    return status;
+}
+
+static int setup_device(struct bladerf *dev, struct app_params *p)
+{
+    int status;
+    struct bladerf_rational_rate sample_rate = GMSK_SAMPLERATE_INITIALIZER;
+    const unsigned int frequency = 1000000000;
+    const unsigned int bandwidth = 1500000;
+    const int txvga1 = -4;
+    const int txvga2 = 10;
+
+    printf("\nApplying device settings...\n");
+
+    p->timeout_ms = 2500;
+    printf("  Stream timeout: %u ms\n", p->timeout_ms);
+
+    status = bladerf_set_frequency(dev, BLADERF_MODULE_TX, frequency);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set frequency: %s\n",
+                bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  Frequency: %u\n", frequency);
+    }
+
+    status = bladerf_set_rational_sample_rate(dev, BLADERF_MODULE_TX,
+                                              &sample_rate, NULL);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set sample rate: %s\n",
+                bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  Samplerate %"PRIu64" %"PRIu64"/%"PRIu64"\n",
+                sample_rate.integer, sample_rate.num, sample_rate.den);
+    }
+
+    status = bladerf_set_bandwidth(dev, BLADERF_MODULE_TX, bandwidth, NULL);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set bandwidth: %s\n",
+                bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  Bandwidth: %u\n", bandwidth);
+    }
+
+
+
+    status = bladerf_set_txvga1(dev, txvga1);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set TXVGA1: %s\n", bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  TXVGA1: %d\n", txvga1);
+    }
+
+    status = bladerf_set_txvga2(dev, 10);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set TXVGA2: %s\n", bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  TXVGA2: %d\n", txvga2);
+    }
+
+    return status;
+}
+
+static int restore_settings(struct bladerf *dev, struct app_params *p,
+                            struct settings *s)
+{
+    int status, error = 0;
+
+    printf("\nRestoring settings...\n");
+
+    p->timeout_ms = s->timeout_ms;
+    printf("  Stream timeout: %u\n", p->timeout_ms);
+
+    status = bladerf_set_frequency(dev, BLADERF_MODULE_TX, s->frequency);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set frequency: %s\n",
+                bladerf_strerror(status));
+        return status;
+    } else {
+        printf("  Frequency: %u\n", s->frequency);
+    }
+
+    status = bladerf_set_rational_sample_rate(dev, BLADERF_MODULE_TX,
+                                              &s->sample_rate, NULL);
+    if (status != 0) {
+        error = first_error(status, error);
+        fprintf(stderr, "Failed to set sample rate: %s\n",
+                bladerf_strerror(status));
+    } else {
+        printf("  Samplerate %"PRIu64" %"PRIu64"/%"PRIu64"\n",
+                s->sample_rate.integer, s->sample_rate.num, s->sample_rate.den);
+    }
+
+    status = bladerf_set_bandwidth(dev, BLADERF_MODULE_TX, s->bandwidth, NULL);
+    if (status != 0) {
+        error = first_error(status, error);
+        fprintf(stderr, "Failed to set bandwidth: %s\n",
+                bladerf_strerror(status));
+    } else {
+        printf("  Bandwidth: %u\n", s->bandwidth);
+    }
+
+    status = bladerf_set_txvga1(dev, s->txvga1);
+    if (status != 0) {
+        error = first_error(status, error);
+        fprintf(stderr, "Failed to set txvga1: %s\n", bladerf_strerror(status));
+    } else {
+        printf("  TXVGA1: %d\n", s->txvga1);
+    }
+
+    status = bladerf_set_txvga2(dev, s->txvga2);
+    if (status != 0) {
+        error = first_error(status, error);
+        fprintf(stderr, "Failed to set txvga2: %s\n", bladerf_strerror(status));
+    } else {
+        printf("  TXVGA2: %d\n", s->txvga2);
+    }
+
+    return error;
+}
+
+static int transmit_bursts(struct bladerf *dev, struct app_params *p)
 {
     int status, status_out;
     struct bladerf_metadata meta;
     unsigned int i;
     const unsigned int burst_len = (unsigned int) ARRAY_SIZE(gmsk_burst) / 2;
     const unsigned int timeout_backup = p->timeout_ms;
+    const unsigned int buf_len = (burst_len / 1024) * 1024 + 1024;
+    const unsigned int iterations = 10000;
 
-    p->timeout_ms = 5000000;
+    printf("\nTransmitting bursts (%u iterations)...\n", iterations);
 
     memset(&meta, 0, sizeof(meta));
     meta.flags = BLADERF_META_FLAG_TX_BURST_START |
                  BLADERF_META_FLAG_TX_BURST_END;
 
-    status = perform_sync_init(dev, BLADERF_MODULE_TX, t->buf_len, p);
+    status = perform_sync_init(dev, BLADERF_MODULE_TX, buf_len, p);
     if (status != 0) {
         goto out;
     }
@@ -69,20 +250,20 @@ static int run(struct bladerf *dev, struct app_params *p,
                 bladerf_strerror(status));
         goto out;
     } else {
-        printf("Initial timestamp: 0x%016"PRIx64"\n", meta.timestamp);
+        printf("  Initial timestamp: 0x%016"PRIx64"\n", meta.timestamp);
     }
 
     /* Start 1M samples in */
     meta.timestamp += 1000000;
 
-    for (i = status = 0; i < t->iterations && status == 0; i++) {
-        status = bladerf_sync_tx(dev, gmsk_burst, burst_len, &meta, 120000);
+    for (i = status = 0; i < iterations && status == 0; i++) {
+        status = bladerf_sync_tx(dev, gmsk_burst, burst_len, &meta, 2000);
 
-        /* Distance between beginning of each burst is 100k samples */
-        meta.timestamp += 100000 - burst_len;
+        /* Distance between beginning of each burst is 10k samples */
+        meta.timestamp += 10000 - burst_len;
     }
 
-    usleep(1000000);
+    usleep(1500000);
 
 out:
     status_out = bladerf_enable_module(dev, BLADERF_MODULE_TX, false);
@@ -94,38 +275,22 @@ out:
 
 int test_fn_tx_gmsk_bursts(struct bladerf *dev, struct app_params *p)
 {
-    size_t i;
     int status, status_restore;
-    unsigned int samplerate_backup;
-    struct bladerf_rational_rate samplerate = GMSK_SAMPLERATE_INITIALIZER;
+    struct settings dev_settings;
 
-    status = bladerf_get_sample_rate(dev, BLADERF_MODULE_TX,
-                                     &samplerate_backup);
-
+    status = backup_settings(dev, p, &dev_settings);
     if (status != 0) {
-        fprintf(stderr, "Failed to read TX samplerate: %s\n",
-                bladerf_strerror(status));
-        return -1;
+        return status;
     }
 
-    status = bladerf_set_rational_sample_rate(dev, BLADERF_MODULE_TX,
-                                              &samplerate, NULL);
+    status = setup_device(dev, p);
+    if (status == 0) {
+        status = transmit_bursts(dev, p);
+    }
 
+    status_restore = restore_settings(dev, p, &dev_settings);
     if (status != 0) {
-        fprintf(stderr, "Failed to read TX samplerate: %s\n",
-                bladerf_strerror(status));
-        return -1;
-    }
-
-    for (i = status = 0; i < ARRAY_SIZE(tests) && status == 0; i++) {
-        status = run(dev, p, &tests[i]);
-    }
-
-    status_restore  = bladerf_set_sample_rate(dev, BLADERF_MODULE_TX,
-                                              samplerate_backup, NULL);
-    if (status_restore != 0) {
-        fprintf(stderr, "Failed to restore TX samplerate: %s\n",
-                bladerf_strerror(status));
+        status = first_error(status, status_restore);
     }
 
     return status;
