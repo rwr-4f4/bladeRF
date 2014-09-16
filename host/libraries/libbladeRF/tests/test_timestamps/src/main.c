@@ -50,12 +50,14 @@ DECLARE_TEST(rx_gaps);
 DECLARE_TEST(rx_scheduled);
 DECLARE_TEST(tx_onoff);
 DECLARE_TEST(tx_gmsk_bursts);
+DECLARE_TEST(loopback_onoff);
 
 static const struct test *tests[] = {
     TEST(rx_gaps),
     TEST(rx_scheduled),
     TEST(tx_onoff),
     TEST(tx_gmsk_bursts),
+    TEST(loopback_onoff),
 };
 
 

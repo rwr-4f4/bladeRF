@@ -7,6 +7,15 @@ set(INCLUDES
     ${CMAKE_CURRENT_SOURCE_DIR}/../common/include
     ${BLADERF_HOST_COMMON_SOURCE_DIR}/include
 )
+
+set(LIBS libbladerf_shared)
+
+if(MSVC)
+    set(LIBS ${LIBS} ${LIBPTHREADSWIN32_LIBRARIES})
+else()
+    set(LIBS ${LIBS} ${CMAKE_THREAD_LIBS_INIT})
+endif(MSVC)
+
 include_directories(${INCLUDES})
 
 set(SRC
@@ -16,8 +25,9 @@ set(SRC
     src/test_rx_scheduled.c
     src/test_tx_onoff.c
     src/test_tx_gmsk_bursts.c
+    src/test_loopback_onoff.c
     ${BLADERF_HOST_COMMON_SOURCE_DIR}/conversions.c
 )
 
 add_executable(libbladeRF_test_timestamps ${SRC})
-target_link_libraries(libbladeRF_test_timestamps libbladerf_shared)
+target_link_libraries(libbladeRF_test_timestamps ${LIBS})
