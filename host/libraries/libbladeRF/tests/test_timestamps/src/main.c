@@ -109,6 +109,8 @@ static void usage(const char *argv0)
     printf("         rx_scheduled         Perform reads at specific timestamps.\n");
     printf("         tx_onoff             Transmits ON-OFF bursts.\n");
     printf("                                Requires external verification.\n");
+    printf("         loopback_onoff       Transmits ON-OFF bursts which are verified\n");
+    printf("                                via baseband loopback to the RX module.\n");
     printf("\n");
     printf("    -S, --seed <value>        Seed to use for PRNG-based test cases.\n");
     printf("\n");
