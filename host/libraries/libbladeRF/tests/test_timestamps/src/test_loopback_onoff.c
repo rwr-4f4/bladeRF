@@ -41,6 +41,8 @@
 #define TX_MAGNITUDE    2000
 #define RX_POWER_THRESH (1024 * 1024)
 
+#define DEBUG_RX 1
+
 struct burst {
     uint64_t duration;
     uint64_t gap;
@@ -114,10 +116,12 @@ void *rx_task(void *args)
     uint64_t burst_start, burst_end, burst_end_prev;
     bool stop;
 
+#ifdef DEBUG_RX
     FILE *debug = fopen("debug.bin", "wb");
     if (!debug) {
         perror("fopen");
     }
+#endif
 
     samples = init(t, BLADERF_MODULE_RX);
     if (samples == NULL) {
@@ -145,7 +149,9 @@ void *rx_task(void *args)
                     fprintf(stderr, "RX failed in burst %"PRIu64": %s\n",
                             (uint64_t)burst_num, bladerf_strerror(status));
                 } else {
+#if DEBUG_RX
                     fwrite(samples, 2 * sizeof(samples[0]), t->params->buf_size, debug);
+#endif
                 }
 
                 idx = 0;
@@ -176,8 +182,12 @@ void *rx_task(void *args)
 
                             if (delta > 1) {
                                 status = BLADERF_ERR_UNEXPECTED;
-                                fprintf(stderr, "Burst gap varied by %" PRIu64
-                                        " samples.\n", delta);
+                                fprintf(stderr, "Burst #%-4"PRIu64": Failed. "
+                                        " Gap varied by %"PRIu64 " samples."
+                                        " Expected=%-8"PRIu64
+                                        " rx'd=%-8"PRIu64"\n",
+                                        burst_num + 1, delta,
+                                        t->bursts[burst_num - 1].gap, gap);
                             }
                         }
                         break;
@@ -214,8 +224,11 @@ void *rx_task(void *args)
 
                         if (delta > 1) {
                             status = BLADERF_ERR_UNEXPECTED;
-                            fprintf(stderr, "Burst duration varied by %" PRIu64
-                                    " samples. Expected \n", delta);
+                            fprintf(stderr, "Burst #%-4"PRIu64": Failed. "
+                                    "Duration varied by %"PRIu64" samples. "
+                                    "Expected=%-8"PRIu64"rx'd=%-8"PRIu64"\n",
+                                    burst_num, delta,
+                                    t->bursts[burst_num].duration, duration);
 
                         } else {
                             const uint64_t gap =
@@ -242,9 +255,6 @@ void *rx_task(void *args)
                 }
 
                 break;
-
-            default:
-                break;
         }
 
         pthread_mutex_lock(&t->lock);
@@ -254,7 +264,10 @@ void *rx_task(void *args)
 
     free(samples);
     bladerf_enable_module(t->dev, BLADERF_MODULE_RX, false);
+
+#if DEBUG_RX
     fclose(debug);
+#endif
 
     /* Ensure the TX side is signalled to stop, if it isn't already */
     pthread_mutex_lock(&t->lock);
