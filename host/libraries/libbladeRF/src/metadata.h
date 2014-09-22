@@ -92,9 +92,6 @@ static inline uint64_t metadata_get_timestamp(const uint8_t *header)
 
    ret = LE64_TO_HOST(ret);
 
-   // FIXME This needs to get moved into the FPGA
-   ret /= 2;
-
    return ret;
 }
 
@@ -109,9 +106,6 @@ static inline uint64_t metadata_get_flags(const uint8_t *header)
 static inline void metadata_set(uint8_t *header,
                                 uint64_t timestamp, uint32_t flags)
 {
-    // FIXME this should be done in the FPGA
-    timestamp *= 2;
-
     timestamp = HOST_TO_LE64(timestamp);
 
     flags = HOST_TO_LE32(flags);

@@ -73,10 +73,7 @@ int sync_init(struct bladerf *dev,
             bytes_per_sample = 4;
 
             /* Enable timestamps, with 1 count per sample */
-            gpio_val |= BLADERF_GPIO_TIMESTAMP;
-
-            // TODO This needs to be added to the FPGA
-            //gpio_val |= BLADERF_GPIO_TIMESTAMP_DIV2;
+            gpio_val |= (BLADERF_GPIO_TIMESTAMP | BLADERF_GPIO_TIMESTAMP_DIV2);
             break;
 
         default:
