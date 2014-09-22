@@ -56,7 +56,6 @@ struct test {
     bool stop;
 };
 
-
 typedef enum {
     GET_SAMPLES,
     WAIT_FOR_BURST_START,
@@ -112,22 +111,23 @@ void *rx_task(void *args)
     struct bladerf_metadata meta;
     unsigned int idx;
     state curr_state, next_state;
-    uint64_t burst_start, burst_end, burst_end_prev;
+    uint64_t burst_start, burst_end, burst_end_prev, wait_ticks;
+    const uint64_t max_wait = 3 * t->params->samplerate;
     bool stop;
+
+    FILE *debug = fopen("debug.bin", "wb");
+    if (!debug) {
+        perror("fopen");
+    }
 
     samples = init(t, BLADERF_MODULE_RX);
     if (samples == NULL) {
         return NULL;
     }
 
-    samples = malloc(2 * sizeof(int16_t) * t->params->buf_size);
-    if (samples == NULL) {
-        perror("malloc");
-        return NULL;
-    }
-
     status = 0;
     burst_num = 0;
+    wait_ticks = 0;
 
     memset(&meta, 0, sizeof(meta));
     meta.flags |= BLADERF_META_FLAG_RX_NOW;
@@ -146,6 +146,8 @@ void *rx_task(void *args)
                 if (status != 0) {
                     fprintf(stderr, "RX failed in burst %"PRIu64": %s\n",
                             (uint64_t)burst_num, bladerf_strerror(status));
+                } else {
+                    fwrite(samples, 2 * sizeof(samples[0]), t->params->buf_size, debug);
                 }
 
                 idx = 0;
@@ -161,9 +163,7 @@ void *rx_task(void *args)
                     if (sig_pow >= RX_POWER_THRESH) {
                         burst_start = meta.timestamp + (idx / 2);
                         burst_end_prev = burst_end;
-
-                        printf("Burst detected @ %"PRIu64"\n", burst_start);
-
+                        curr_state = WAIT_FOR_BURST_END;
                         assert(burst_start > burst_end_prev);
 
                         if (burst_num != 0) {
@@ -171,22 +171,17 @@ void *rx_task(void *args)
                             uint64_t delta;
 
                             if (gap > t->bursts[burst_num - 1].gap) {
-                                delta = gap - t->bursts[burst_num].gap;
+                                delta = gap - t->bursts[burst_num - 1].gap;
                             } else {
-                                delta = t->bursts[burst_num].gap - gap;
+                                delta = t->bursts[burst_num - 1].gap - gap;
                             }
 
                             if (delta > 1) {
                                 status = BLADERF_ERR_UNEXPECTED;
                                 fprintf(stderr, "Burst gap varied by %" PRIu64
                                         " samples.\n", delta);
-                            } else {
-                                printf("Burst gap = %"PRIu64", exp=%"PRIu64"\n",
-                                       gap, t->bursts[burst_num].gap);
-                                curr_state = WAIT_FOR_BURST_END;
                             }
                         }
-
                         break;
                     }
                 }
@@ -195,7 +190,18 @@ void *rx_task(void *args)
                 if (idx >= (2 * t->params->buf_size)) {
                     next_state = curr_state;
                     curr_state = GET_SAMPLES;
+
+                    wait_ticks += t->params->buf_size;
+                    if (wait_ticks > max_wait) {
+                        status = BLADERF_ERR_UNEXPECTED;
+                        fprintf(stderr, "Error: Failed to detect burst within "
+                                "%"PRIu64" samples. Expected duration=%-8"PRIu64
+                                " gap=%-8"PRIu64"\n", max_wait,
+                                t->bursts[burst_num].duration,
+                                t->bursts[burst_num].gap);
+                    }
                 }
+
 
                 break;
 
@@ -209,9 +215,10 @@ void *rx_task(void *args)
                         uint64_t duration, delta;
 
                         burst_end = meta.timestamp + (idx / 2);
-                        assert(burst_end > burst_start);
 
+                        assert(burst_end > burst_start);
                         duration = burst_end - burst_start;
+
                         if (duration > t->bursts[burst_num].duration) {
                             delta  = duration - t->bursts[burst_num].duration;
                         } else {
@@ -224,8 +231,20 @@ void *rx_task(void *args)
                                     " samples.\n", delta);
 
                         } else {
+                            const uint64_t gap =
+                                (burst_num == 0) ? 0 :
+                                                   t->bursts[burst_num - 1].gap;
+
+                            printf("Burst %u passed: "
+                                   "duration=%-8"PRIu64" gap=%-8"PRIu64"\n",
+                                    (unsigned int) burst_num,
+                                    t->bursts[burst_num].duration, gap);
+
                             curr_state = WAIT_FOR_BURST_START;
+                            burst_num++;
                         }
+
+                        break;
                     }
                 }
 
@@ -241,13 +260,6 @@ void *rx_task(void *args)
                 break;
         }
 
-        if (status != 0) {
-            fprintf(stderr, "RX failed for burst %"PRIu64": %s\n",
-                    (uint64_t) burst_num, bladerf_strerror(status));
-        }
-
-        burst_num++;
-
         pthread_mutex_lock(&t->lock);
         stop = t->stop;
         pthread_mutex_unlock(&t->lock);
@@ -255,6 +267,13 @@ void *rx_task(void *args)
 
     free(samples);
     bladerf_enable_module(t->dev, BLADERF_MODULE_RX, false);
+    fclose(debug);
+
+    /* Ensure the TX side is signalled to stop, if it isn't already */
+    pthread_mutex_lock(&t->lock);
+    t->stop = true;
+    pthread_mutex_unlock(&t->lock);
+
     return NULL;
 }
 
@@ -266,6 +285,7 @@ static void * tx_task(void *args)
     struct bladerf_metadata meta;
     unsigned int samples_left;
     struct test *t = (struct test *) args;
+    bool stop = false;
 
     samples = init(t, BLADERF_MODULE_TX);
     if (samples == NULL) {
@@ -284,9 +304,9 @@ static void * tx_task(void *args)
                 bladerf_strerror(status));
     }
 
-    meta.timestamp += 200000;
+    meta.timestamp += 400000;
 
-    for (i = 0; i < t->num_bursts; i++) {
+    for (i = 0; i < t->num_bursts && !stop; i++) {
         meta.flags |= BLADERF_META_FLAG_TX_BURST_START;
         samples_left = t->bursts[i].duration;
 
@@ -307,6 +327,11 @@ static void * tx_task(void *args)
                         "samples left: %s\n",
                         i, samples_left, bladerf_strerror(status));
 
+                /* Stop the RX worker */
+                pthread_mutex_lock(&t->lock);
+                t->stop = true;
+                pthread_mutex_unlock(&t->lock);
+
             }
 
             meta.flags &= ~BLADERF_META_FLAG_TX_BURST_START;
@@ -314,8 +339,16 @@ static void * tx_task(void *args)
         }
 
         meta.timestamp += (t->bursts[i].duration + t->bursts[i].gap);
+
+        pthread_mutex_lock(&t->lock);
+        stop = t->stop;
+        pthread_mutex_unlock(&t->lock);
     }
 
+    /* TODO: Wait for samples to finish */
+    printf("TX finished. Waiting for samples to be transmitted...\n");
+    usleep(2500000);
+    printf("Done.\n");
 
     free(samples);
     bladerf_enable_module(t->dev, BLADERF_MODULE_TX, false);
@@ -324,42 +357,83 @@ static void * tx_task(void *args)
 
 static inline void fill_bursts(struct test *t)
 {
-    size_t i;
-    const unsigned int min_duration = 16;
-    const unsigned int max_duration = 4 * t->params->buf_size;
-    const unsigned int max_gap = 4 * t->params->buf_size;
-    unsigned int min_gap;
+    uint64_t i;
+    const uint64_t min_duration = 16;
+    const uint64_t max_duration = 4 * t->params->buf_size;
+    const uint64_t max_gap = 2 * max_duration;
+    uint64_t min_gap;
     uint64_t randval_state;
+
 
     randval_init(&randval_state, 1);
 
     for (i = 0; i < t->num_bursts; i++) {
         randval_update(&randval_state);
         randval_state = randval_state % (max_duration - min_duration + 1);
-        t->bursts[i].duration = (unsigned int) randval_state + min_duration;
+        t->bursts[i].duration = randval_state + min_duration;
 
         randval_update(&randval_state);
         min_gap = 16 + t->params->buf_size -
-                            t->bursts[i].duration % t->params->buf_size;
-        randval_state = randval_state % (max_gap - min_gap + 1);
-        t->bursts[i].gap = (unsigned int) randval_state + min_gap;
+                  (t->bursts[i].duration % t->params->buf_size);
 
-        printf("Burst %-4"PRIu64": duration=%-8"PRIu64"  gap=%-8"PRIu64"\n",
-               (uint64_t)i, t->bursts[i].duration, t->bursts[i].gap);
+        randval_state = randval_state % (max_gap - min_gap + 1);
+        t->bursts[i].gap = randval_state + min_gap;
     }
 }
 
+static inline int setup_device(struct bladerf *dev)
+{
+    int status;
+
+    status = bladerf_set_loopback(dev, BLADERF_LB_BB_TXVGA1_RXVGA2);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set loopback mode: %s\n",
+                bladerf_strerror(status));
+        return status;
+    }
+
+    status = bladerf_set_rxvga1(dev, 30);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set RXVGA1 value: %s\n",
+                bladerf_strerror(status));
+        return status;
+    }
+
+    status = bladerf_set_rxvga2(dev, 18);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set RXVGA2 value: %s\n",
+                bladerf_strerror(status));
+        return status;
+    }
+
+    status = bladerf_set_txvga1(dev, -4);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set TXVGA1 value: %s\n",
+                bladerf_strerror(status));
+        return status;
+    }
+
+    status = bladerf_set_txvga2(dev, 14);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set TXVGA2 value: %s\n",
+                bladerf_strerror(status));
+        return status;
+    }
+
+    return status;
+}
 
 int test_fn_loopback_onoff(struct bladerf *dev, struct app_params *p)
 {
     int status = 0;
     struct test test;
-    pthread_t tx_thread;
-    bool tx_started;
+    pthread_t tx_thread, rx_thread;
+    bool tx_started = false;
+    bool rx_started = false;
 
     test.dev = dev;
     test.params = p;
-    test.num_bursts = 2;
+    test.num_bursts = 20;
     test.stop = false;
 
     pthread_mutex_init(&test.lock, NULL);
@@ -372,16 +446,22 @@ int test_fn_loopback_onoff(struct bladerf *dev, struct app_params *p)
         fill_bursts(&test);
     }
 
-    status = bladerf_set_loopback(dev, BLADERF_LB_NONE);
+    status = setup_device(dev);
     if (status != 0) {
-        fprintf(stderr, "Failed to set loopback mode: %s\n",
-                bladerf_strerror(status));
+        goto out;
+    }
+
+    status = pthread_create(&rx_thread, NULL, rx_task, &test);
+    if (status != 0) {
+        fprintf(stderr, "Failed to start RX thread: %s\n", strerror(status));
+        goto out;
+    } else {
+        rx_started = true;
     }
 
     status = pthread_create(&tx_thread, NULL, tx_task, &test);
     if (status != 0) {
         fprintf(stderr, "Failed to start TX thread: %s\n", strerror(status));
-        tx_started = false;
         goto out;
     } else {
         tx_started = true;
@@ -390,6 +470,10 @@ int test_fn_loopback_onoff(struct bladerf *dev, struct app_params *p)
 out:
     if (tx_started) {
         pthread_join(tx_thread, NULL);
+    }
+
+    if (rx_started) {
+        pthread_join(rx_thread, NULL);
     }
 
     free(test.bursts);
