@@ -111,8 +111,7 @@ void *rx_task(void *args)
     struct bladerf_metadata meta;
     unsigned int idx;
     state curr_state, next_state;
-    uint64_t burst_start, burst_end, burst_end_prev, wait_ticks;
-    const uint64_t max_wait = 3 * t->params->samplerate;
+    uint64_t burst_start, burst_end, burst_end_prev;
     bool stop;
 
     FILE *debug = fopen("debug.bin", "wb");
@@ -127,7 +126,6 @@ void *rx_task(void *args)
 
     status = 0;
     burst_num = 0;
-    wait_ticks = 0;
 
     memset(&meta, 0, sizeof(meta));
     meta.flags |= BLADERF_META_FLAG_RX_NOW;
@@ -190,18 +188,7 @@ void *rx_task(void *args)
                 if (idx >= (2 * t->params->buf_size)) {
                     next_state = curr_state;
                     curr_state = GET_SAMPLES;
-
-                    wait_ticks += t->params->buf_size;
-                    if (wait_ticks > max_wait) {
-                        status = BLADERF_ERR_UNEXPECTED;
-                        fprintf(stderr, "Error: Failed to detect burst within "
-                                "%"PRIu64" samples. Expected duration=%-8"PRIu64
-                                " gap=%-8"PRIu64"\n", max_wait,
-                                t->bursts[burst_num].duration,
-                                t->bursts[burst_num].gap);
-                    }
                 }
-
 
                 break;
 
@@ -228,17 +215,17 @@ void *rx_task(void *args)
                         if (delta > 1) {
                             status = BLADERF_ERR_UNEXPECTED;
                             fprintf(stderr, "Burst duration varied by %" PRIu64
-                                    " samples.\n", delta);
+                                    " samples. Expected \n", delta);
 
                         } else {
                             const uint64_t gap =
                                 (burst_num == 0) ? 0 :
                                                    t->bursts[burst_num - 1].gap;
 
-                            printf("Burst %u passed: "
-                                   "duration=%-8"PRIu64" gap=%-8"PRIu64"\n",
-                                    (unsigned int) burst_num,
-                                    t->bursts[burst_num].duration, gap);
+                            printf("Burst #%-4u: Passed. " "duration=%-8"PRIu64
+                                   "gap=%-8"PRIu64"\n",
+                                   (unsigned int) burst_num + 1,
+                                   t->bursts[burst_num].duration, gap);
 
                             curr_state = WAIT_FOR_BURST_START;
                             burst_num++;
@@ -433,7 +420,7 @@ int test_fn_loopback_onoff(struct bladerf *dev, struct app_params *p)
 
     test.dev = dev;
     test.params = p;
-    test.num_bursts = 20;
+    test.num_bursts = 200;
     test.stop = false;
 
     pthread_mutex_init(&test.lock, NULL);
