@@ -387,10 +387,11 @@ static inline int fill_bursts(struct test *t)
         t->bursts[i].duration = tmp + min_duration;
 
         randval_update(&t->params->prng_state);
-        min_gap = 16 + t->params->buf_size -
-                  (t->bursts[i].duration % t->params->buf_size);
 
         if (i != 0) {
+            min_gap = t->params->buf_size -
+                        (t->bursts[i - 1].duration % t->params->buf_size);
+
             tmp = t->params->prng_state % (max_gap - min_gap + 1);
             t->bursts[i].gap = tmp + min_gap;
         } else {
