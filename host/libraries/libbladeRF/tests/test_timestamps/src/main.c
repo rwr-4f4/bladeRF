@@ -28,11 +28,12 @@
 #include <stdbool.h>
 #include <string.h>
 #include <getopt.h>
+#include <limits.h>
 #include <libbladeRF.h>
 #include "conversions.h"
 #include "test_timestamps.h"
 
-#define OPTSTR "hd:s:S:t:v:"
+#define OPTSTR "hd:s:S:t:B:v:"
 
 
 #define DECLARE_TEST(name) \
@@ -67,6 +68,7 @@ static const struct option long_options[] = {
     /* Device configuration */
     { "device",             required_argument,  0,      'd' },
     { "samplerate",         required_argument,  0,      's' },
+    { "buflen",             required_argument,  0,      'B' },
 
     /* Test configuration */
     { "test",               required_argument,  0,      't' },
@@ -89,8 +91,9 @@ const struct numeric_suffix freq_suffixes[] = {
     { "GHz", 1000000000 },
 };
 
-const unsigned int num_freq_suffixes =
-                            sizeof(freq_suffixes) / sizeof(freq_suffixes[0]);
+const struct numeric_suffix len_suffixes[] = {
+    { "k",   1024 },
+};
 
 static void usage(const char *argv0)
 {
@@ -102,6 +105,7 @@ static void usage(const char *argv0)
     printf("                              any device found will be used.\n");
     printf("    -s, --samplerate <rate>   Set the specified sample rate.\n");
     printf("                              Default = %u\n", DEFAULT_SAMPLERATE);
+    printf("    -B, --buflen <value>      Buffer length. Must be multiple of 1024.\n");
 
     printf("Test configuration:\n");
     printf("    -t, --test <name>         Test name to run. Options are:\n");
@@ -185,12 +189,27 @@ static int handle_args(int argc, char *argv[], struct app_params *p)
                                                 BLADERF_SAMPLERATE_MIN,
                                                 BLADERF_SAMPLERATE_REC_MAX,
                                                 freq_suffixes,
-                                                num_freq_suffixes,
+                                                ARRAY_SIZE(freq_suffixes),
                                                 &ok);
                 if (!ok) {
                     fprintf(stderr, "Invalid sample rate: %s\n", optarg);
                     return -1;
                 }
+                break;
+
+            case 'B':
+                p->buf_size = str2uint_suffix(optarg,
+                                              1024,
+                                              UINT_MAX,
+                                              len_suffixes,
+                                              ARRAY_SIZE(len_suffixes),
+                                              &ok);
+
+                if (!ok || (p->buf_size % 1024) != 0) {
+                    fprintf(stderr, "Invalid buffer length: %s\n", optarg);
+                    return -1;
+                }
+
                 break;
 
             case 't':
@@ -230,8 +249,6 @@ static inline int apply_params(struct bladerf *dev, struct app_params *p)
         return status;
     }
 
-    /* XXX: Must the RX and TX channels be at the same sample rate for
-     *      timestamps to be used? */
     status = bladerf_set_sample_rate(dev, BLADERF_MODULE_TX, p->samplerate, NULL);
     if (status != 0) {
         fprintf(stderr, "Failed to set TX sample rate: %s\n",
