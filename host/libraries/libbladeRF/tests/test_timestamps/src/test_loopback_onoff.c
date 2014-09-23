@@ -39,7 +39,7 @@
 #include "minmax.h"
 
 #define TX_MAGNITUDE    2000
-#define RX_POWER_THRESH (1024 * 1024)
+#define RX_POWER_THRESH (256 * 256)
 
 /* These definitions enable some debugging code */
 #define ENABLE_RX_FILE      1   /* Save RX'd samples to debug.bin */
@@ -152,6 +152,8 @@ void *rx_task(void *args)
                     fprintf(stderr, "RX failed in burst %"PRIu64": %s\n",
                             (uint64_t)burst_num, bladerf_strerror(status));
                 } else {
+                    //printf("Read %-8u samples @ 0x%08"PRIx64" (%-8"PRIu64")\n",
+                    //       t->params->buf_size, meta.timestamp, meta.timestamp);
 #if ENABLE_RX_FILE
                     fwrite(samples, 2 * sizeof(samples[0]), t->params->buf_size, debug);
 #endif
@@ -170,6 +172,8 @@ void *rx_task(void *args)
                     if (sig_pow >= RX_POWER_THRESH) {
                         burst_start = meta.timestamp + (idx / 2);
                         burst_end_prev = burst_end;
+                        burst_end = 0;
+
                         curr_state = WAIT_FOR_BURST_END;
                         assert(burst_start > burst_end_prev);
 
@@ -215,7 +219,6 @@ void *rx_task(void *args)
                         uint64_t duration, delta;
 
                         burst_end = meta.timestamp + (idx / 2);
-
                         assert(burst_end > burst_start);
                         duration = burst_end - burst_start;
 
@@ -460,7 +463,7 @@ int test_fn_loopback_onoff(struct bladerf *dev, struct app_params *p)
 
     test.dev = dev;
     test.params = p;
-    test.num_bursts = 2;
+    test.num_bursts = 25;
     test.stop = false;
 
     pthread_mutex_init(&test.lock, NULL);
