@@ -360,42 +360,56 @@ static void * tx_task(void *args)
     return NULL;
 }
 
-static inline void fill_bursts(struct test *t)
+static inline int fill_bursts(struct test *t)
 {
     uint64_t i;
     const uint64_t min_duration = 16;
     const uint64_t max_duration = 4 * t->params->buf_size;
     const uint64_t max_gap = 2 * max_duration;
-    uint64_t min_gap;
-    uint64_t randval_state;
+    uint64_t prng_val, min_gap, tmp;
+    const char filename[] = "bursts.txt";
+    FILE *f;
 
+    f = fopen(filename, "w");
+    if (f == NULL) {
+        perror("fopen");
+        return -1;
+    }
 
-    randval_init(&randval_state, 1);
+    randval_init(&t->params->prng_state, t->params->prng_seed);
 
-    printf("The following bursts will be run:\n");
-    printf("--------------------------------------\n");
     for (i = 0; i < t->num_bursts; i++) {
-        randval_update(&randval_state);
-        randval_state = randval_state % (max_duration - min_duration + 1);
-        t->bursts[i].duration = randval_state + min_duration;
+        prng_val = t->params->prng_state;
+        randval_update(&t->params->prng_state);
 
-        randval_update(&randval_state);
+        tmp = t->params->prng_state % (max_duration - min_duration + 1);
+
+        t->bursts[i].duration = tmp + min_duration;
+
+        randval_update(&t->params->prng_state);
         min_gap = 16 + t->params->buf_size -
                   (t->bursts[i].duration % t->params->buf_size);
 
         if (i != 0) {
-            randval_state = randval_state % (max_gap - min_gap + 1);
-            t->bursts[i].gap = randval_state + min_gap;
+            tmp = t->params->prng_state % (max_gap - min_gap + 1);
+            t->bursts[i].gap = tmp + min_gap;
         } else {
             t->bursts[i].gap = 0;
         }
 
 
-        printf("Burst #%-4"PRIu64" gap=%-8"PRIu64" duration=%-8"PRIu64"\n",
-               i, t->bursts[i].gap, t->bursts[i].duration);
+        fprintf(f, "Burst #%-4"PRIu64
+                   " gap=%-8"PRIu64
+                   " duration=%-8"PRIu64
+                   " prng=0x%016"PRIx64"\n",
+               i, t->bursts[i].gap, t->bursts[i].duration, prng_val);
     }
 
-    printf("\n");
+    fprintf(f, "\n");
+    printf("Burst descriptions written to %s.\n", filename);
+
+    fclose(f);
+    return 0;
 }
 
 static inline int setup_device(struct bladerf *dev)
