@@ -41,7 +41,9 @@
 #define TX_MAGNITUDE    2000
 #define RX_POWER_THRESH (1024 * 1024)
 
-#define DEBUG_RX 1
+/* These definitions enable some debugging code */
+#define ENABLE_RX_FILE      1   /* Save RX'd samples to debug.bin */
+#define DISABLE_RX_LOOPBACK 0   /* Disable RX task & transmit to the TX port */
 
 struct burst {
     uint64_t duration;
@@ -117,7 +119,7 @@ void *rx_task(void *args)
     uint64_t burst_start, burst_end, burst_end_prev;
     bool stop;
 
-#ifdef DEBUG_RX
+#ifdef ENABLE_RX_FILE
     FILE *debug = fopen("debug.bin", "wb");
     if (!debug) {
         perror("fopen");
@@ -150,7 +152,7 @@ void *rx_task(void *args)
                     fprintf(stderr, "RX failed in burst %"PRIu64": %s\n",
                             (uint64_t)burst_num, bladerf_strerror(status));
                 } else {
-#if DEBUG_RX
+#if ENABLE_RX_FILE
                     fwrite(samples, 2 * sizeof(samples[0]), t->params->buf_size, debug);
 #endif
                 }
@@ -266,7 +268,7 @@ void *rx_task(void *args)
     free(samples);
     bladerf_enable_module(t->dev, BLADERF_MODULE_RX, false);
 
-#if DEBUG_RX
+#if ENABLE_RX_FILE
     fclose(debug);
 #endif
 
@@ -368,6 +370,8 @@ static inline void fill_bursts(struct test *t)
 
     randval_init(&randval_state, 1);
 
+    printf("The following bursts will be run:\n");
+    printf("--------------------------------------\n");
     for (i = 0; i < t->num_bursts; i++) {
         randval_update(&randval_state);
         randval_state = randval_state % (max_duration - min_duration + 1);
@@ -386,9 +390,18 @@ static inline int setup_device(struct bladerf *dev)
 {
     int status;
 
+#if !DISABLE_RX_LOOPBACK
     status = bladerf_set_loopback(dev, BLADERF_LB_BB_TXVGA1_RXVGA2);
     if (status != 0) {
         fprintf(stderr, "Failed to set loopback mode: %s\n",
+                bladerf_strerror(status));
+        return status;
+    }
+#endif
+
+    status = bladerf_set_lna_gain(dev, BLADERF_LNA_GAIN_MAX);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set LNA gain value: %s\n",
                 bladerf_strerror(status));
         return status;
     }
@@ -400,21 +413,21 @@ static inline int setup_device(struct bladerf *dev)
         return status;
     }
 
-    status = bladerf_set_rxvga2(dev, 18);
+    status = bladerf_set_rxvga2(dev, 10);
     if (status != 0) {
         fprintf(stderr, "Failed to set RXVGA2 value: %s\n",
                 bladerf_strerror(status));
         return status;
     }
 
-    status = bladerf_set_txvga1(dev, -4);
+    status = bladerf_set_txvga1(dev, -10);
     if (status != 0) {
         fprintf(stderr, "Failed to set TXVGA1 value: %s\n",
                 bladerf_strerror(status));
         return status;
     }
 
-    status = bladerf_set_txvga2(dev, 14);
+    status = bladerf_set_txvga2(dev, BLADERF_TXVGA2_GAIN_MIN);
     if (status != 0) {
         fprintf(stderr, "Failed to set TXVGA2 value: %s\n",
                 bladerf_strerror(status));
@@ -428,13 +441,17 @@ int test_fn_loopback_onoff(struct bladerf *dev, struct app_params *p)
 {
     int status = 0;
     struct test test;
-    pthread_t tx_thread, rx_thread;
+    pthread_t tx_thread;
     bool tx_started = false;
+
+#if !DISABLE_RX_LOOPBACK
+    pthread_t rx_thread;
     bool rx_started = false;
+#endif
 
     test.dev = dev;
     test.params = p;
-    test.num_bursts = 200;
+    test.num_bursts = 2;
     test.stop = false;
 
     pthread_mutex_init(&test.lock, NULL);
@@ -452,6 +469,9 @@ int test_fn_loopback_onoff(struct bladerf *dev, struct app_params *p)
         goto out;
     }
 
+    printf("Starting bursts...\n");
+
+#if !DISABLE_RX_LOOPBACK
     status = pthread_create(&rx_thread, NULL, rx_task, &test);
     if (status != 0) {
         fprintf(stderr, "Failed to start RX thread: %s\n", strerror(status));
@@ -459,6 +479,7 @@ int test_fn_loopback_onoff(struct bladerf *dev, struct app_params *p)
     } else {
         rx_started = true;
     }
+#endif
 
     status = pthread_create(&tx_thread, NULL, tx_task, &test);
     if (status != 0) {
@@ -473,9 +494,11 @@ out:
         pthread_join(tx_thread, NULL);
     }
 
+#if !DISABLE_RX_LOOPBACK
     if (rx_started) {
         pthread_join(rx_thread, NULL);
     }
+#endif
 
     free(test.bursts);
 
