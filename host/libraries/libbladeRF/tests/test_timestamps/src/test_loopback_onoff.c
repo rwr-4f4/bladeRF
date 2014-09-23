@@ -177,20 +177,20 @@ void *rx_task(void *args)
                             const uint64_t gap = burst_start - burst_end_prev;
                             uint64_t delta;
 
-                            if (gap > t->bursts[burst_num - 1].gap) {
-                                delta = gap - t->bursts[burst_num - 1].gap;
+                            if (gap > t->bursts[burst_num].gap) {
+                                delta = gap - t->bursts[burst_num].gap;
                             } else {
-                                delta = t->bursts[burst_num - 1].gap - gap;
+                                delta = t->bursts[burst_num].gap - gap;
                             }
 
                             if (delta > 1) {
                                 status = BLADERF_ERR_UNEXPECTED;
-                                fprintf(stderr, "Burst #%-4"PRIu64": Failed. "
+                                fprintf(stderr, "Burst #%-4"PRIu64" Failed. "
                                         " Gap varied by %"PRIu64 " samples."
                                         " Expected=%-8"PRIu64
                                         " rx'd=%-8"PRIu64"\n",
                                         burst_num + 1, delta,
-                                        t->bursts[burst_num - 1].gap, gap);
+                                        t->bursts[burst_num].gap, gap);
                             }
                         }
                         break;
@@ -227,7 +227,7 @@ void *rx_task(void *args)
 
                         if (delta > 1) {
                             status = BLADERF_ERR_UNEXPECTED;
-                            fprintf(stderr, "Burst #%-4"PRIu64": Failed. "
+                            fprintf(stderr, "Burst #%-4"PRIu64" Failed. "
                                     "Duration varied by %"PRIu64" samples. "
                                     "Expected=%-8"PRIu64"rx'd=%-8"PRIu64"\n",
                                     burst_num, delta,
@@ -235,13 +235,12 @@ void *rx_task(void *args)
 
                         } else {
                             const uint64_t gap =
-                                (burst_num == 0) ? 0 :
-                                                   t->bursts[burst_num - 1].gap;
+                                (burst_num == 0) ? 0 : t->bursts[burst_num].gap;
 
-                            printf("Burst #%-4u: Passed. " "duration=%-8"PRIu64
-                                   "gap=%-8"PRIu64"\n",
+                            printf("Burst #%-4u Passed. gap=%-8"PRIu64
+                                   "duration=%-8"PRIu64"\n",
                                    (unsigned int) burst_num + 1,
-                                   t->bursts[burst_num].duration, gap);
+                                   gap, t->bursts[burst_num].duration);
 
                             curr_state = WAIT_FOR_BURST_START;
                             burst_num++;
@@ -313,6 +312,10 @@ static void * tx_task(void *args)
         meta.flags |= BLADERF_META_FLAG_TX_BURST_START;
         samples_left = t->bursts[i].duration;
 
+        if (i != 0) {
+            meta.timestamp += (t->bursts[i-1].duration + t->bursts[i].gap);
+        }
+
         while (samples_left != 0 && status == 0) {
             unsigned int to_send = uint_min(t->params->buf_size, samples_left);
 
@@ -341,17 +344,13 @@ static void * tx_task(void *args)
             samples_left -= to_send;
         }
 
-        meta.timestamp += (t->bursts[i].duration + t->bursts[i].gap);
-
         pthread_mutex_lock(&t->lock);
         stop = t->stop;
         pthread_mutex_unlock(&t->lock);
     }
 
     /* TODO: Wait for samples to finish */
-    printf("TX finished. Waiting for samples to be transmitted...\n");
     usleep(2500000);
-    printf("Done.\n");
 
     free(samples);
     bladerf_enable_module(t->dev, BLADERF_MODULE_TX, false);
@@ -381,9 +380,19 @@ static inline void fill_bursts(struct test *t)
         min_gap = 16 + t->params->buf_size -
                   (t->bursts[i].duration % t->params->buf_size);
 
-        randval_state = randval_state % (max_gap - min_gap + 1);
-        t->bursts[i].gap = randval_state + min_gap;
+        if (i != 0) {
+            randval_state = randval_state % (max_gap - min_gap + 1);
+            t->bursts[i].gap = randval_state + min_gap;
+        } else {
+            t->bursts[i].gap = 0;
+        }
+
+
+        printf("Burst #%-4"PRIu64" gap=%-8"PRIu64" duration=%-8"PRIu64"\n",
+               i, t->bursts[i].gap, t->bursts[i].duration);
     }
+
+    printf("\n");
 }
 
 static inline int setup_device(struct bladerf *dev)
