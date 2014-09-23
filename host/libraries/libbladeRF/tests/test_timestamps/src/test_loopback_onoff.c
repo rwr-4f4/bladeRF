@@ -75,13 +75,6 @@ static int16_t *init(struct test *t, bladerf_module m)
         return NULL;
     }
 
-    status = bladerf_enable_module(t->dev, m, true);
-    if (status != 0) {
-        fprintf(stderr, "Failed to enable RX module: %s\n",
-                bladerf_strerror(status));
-
-    }
-
     status = bladerf_sync_config(t->dev, m,
                                  BLADERF_FORMAT_SC16_Q11_META,
                                  t->params->num_buffers,
@@ -92,6 +85,14 @@ static int16_t *init(struct test *t, bladerf_module m)
         fprintf(stderr, "Failed to configure RX stream: %s\n",
                 bladerf_strerror(status));
         goto out;
+    }
+
+    status = bladerf_enable_module(t->dev, m, true);
+    if (status != 0) {
+        fprintf(stderr, "Failed to enable %s module: %s\n",
+                (m == BLADERF_MODULE_RX) ? "RX" : "TX",
+                bladerf_strerror(status));
+
     }
 
 out:
