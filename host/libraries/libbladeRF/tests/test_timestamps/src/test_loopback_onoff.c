@@ -42,7 +42,7 @@
 #define RX_POWER_THRESH (256 * 256)
 
 /* These definitions enable some debugging code */
-#define ENABLE_RX_FILE      1   /* Save RX'd samples to debug.bin */
+#define ENABLE_RX_FILE      0   /* Save RX'd samples to debug.bin */
 #define DISABLE_RX_LOOPBACK 0   /* Disable RX task & transmit to the TX port */
 
 struct burst {
