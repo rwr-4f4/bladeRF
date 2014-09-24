@@ -53,7 +53,7 @@ struct test {
     struct bladerf *dev;
     struct app_params *params;
     struct burst *bursts;
-    size_t num_bursts;
+    unsigned int num_bursts;
 
     pthread_mutex_t lock;
     bool stop;
@@ -111,7 +111,7 @@ void *rx_task(void *args)
     struct test *t = (struct test *) args;
     int16_t *samples;
     int status;
-    size_t burst_num;
+    unsigned int burst_num;
     struct bladerf_metadata meta;
     unsigned int idx;
     state curr_state, next_state;
@@ -149,8 +149,8 @@ void *rx_task(void *args)
                                          &meta, t->params->timeout_ms);
 
                 if (status != 0) {
-                    fprintf(stderr, "RX failed in burst %"PRIu64": %s\n",
-                            (uint64_t)burst_num, bladerf_strerror(status));
+                    fprintf(stderr, "RX failed in burst %-4u: %s\n",
+                            burst_num, bladerf_strerror(status));
                 } else {
                     //printf("Read %-8u samples @ 0x%08"PRIx64" (%-8"PRIu64")\n",
                     //       t->params->buf_size, meta.timestamp, meta.timestamp);
@@ -189,7 +189,7 @@ void *rx_task(void *args)
 
                             if (delta > 1) {
                                 status = BLADERF_ERR_UNEXPECTED;
-                                fprintf(stderr, "Burst #%-4"PRIu64" Failed. "
+                                fprintf(stderr, "Burst #%-4u Failed. "
                                         " Gap varied by %"PRIu64 " samples."
                                         " Expected=%-8"PRIu64
                                         " rx'd=%-8"PRIu64"\n",
@@ -230,7 +230,7 @@ void *rx_task(void *args)
 
                         if (delta > 1) {
                             status = BLADERF_ERR_UNEXPECTED;
-                            fprintf(stderr, "Burst #%-4"PRIu64" Failed. "
+                            fprintf(stderr, "Burst #%-4u Failed. "
                                     "Duration varied by %"PRIu64" samples. "
                                     "Expected=%-8"PRIu64"rx'd=%-8"PRIu64"\n",
                                     burst_num, delta,
@@ -242,8 +242,8 @@ void *rx_task(void *args)
 
                             printf("Burst #%-4u Passed. gap=%-8"PRIu64
                                    "duration=%-8"PRIu64"\n",
-                                   (unsigned int) burst_num + 1,
-                                   gap, t->bursts[burst_num].duration);
+                                   burst_num + 1, gap,
+                                   t->bursts[burst_num].duration);
 
                             curr_state = WAIT_FOR_BURST_START;
                             burst_num++;
@@ -286,7 +286,7 @@ static void * tx_task(void *args)
 {
     int status;
     int16_t *samples;
-    size_t i;
+    unsigned int i;
     struct bladerf_metadata meta;
     uint64_t samples_left;
     struct test *t = (struct test *) args;
@@ -335,7 +335,7 @@ static void * tx_task(void *args)
                                      t->params->timeout_ms);
 
             if (status != 0) {
-                fprintf(stderr, "Failed to TX @ burst %"PRIu64", with %"PRIu64
+                fprintf(stderr, "Failed to TX @ burst %-4u with %"PRIu64
                         " samples left: %s\n",
                         i + 1, samples_left, bladerf_strerror(status));
 
