@@ -135,7 +135,7 @@ static void init_app_params(struct app_params *p)
     p->num_buffers = 16;
     p->num_xfers = 8;
     p->buf_size = 64 * 1024;
-    p->timeout_ms = 2500;
+    p->timeout_ms = 10000;
 }
 
 static void deinit_app_params(struct app_params *p)
