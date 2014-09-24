@@ -334,7 +334,7 @@ static void * tx_task(void *args)
             if (status != 0) {
                 fprintf(stderr, "Failed to TX @ burst %"PRIu64", with %u "
                         "samples left: %s\n",
-                        i, samples_left, bladerf_strerror(status));
+                        i + 1, samples_left, bladerf_strerror(status));
 
                 /* Stop the RX worker */
                 pthread_mutex_lock(&t->lock);
@@ -365,8 +365,9 @@ static inline int fill_bursts(struct test *t)
     uint64_t i;
     const uint64_t min_duration = 16;
     const uint64_t max_duration = 4 * t->params->buf_size;
-    const uint64_t max_gap = 2 * max_duration;
-    uint64_t prng_val, min_gap, tmp;
+    const uint64_t max_gap = 3 * max_duration;
+    const uint64_t min_gap = t->params->buf_size;
+    uint64_t prng_val, tmp;
     const char filename[] = "bursts.txt";
     FILE *f;
 
@@ -389,9 +390,6 @@ static inline int fill_bursts(struct test *t)
         randval_update(&t->params->prng_state);
 
         if (i != 0) {
-            min_gap = t->params->buf_size -
-                        (t->bursts[i - 1].duration % t->params->buf_size);
-
             tmp = t->params->prng_state % (max_gap - min_gap + 1);
             t->bursts[i].gap = tmp + min_gap;
         } else {
@@ -403,7 +401,7 @@ static inline int fill_bursts(struct test *t)
                    " gap=%-8"PRIu64
                    " duration=%-8"PRIu64
                    " prng=0x%016"PRIx64"\n",
-               i, t->bursts[i].gap, t->bursts[i].duration, prng_val);
+               i + 1, t->bursts[i].gap, t->bursts[i].duration, prng_val);
     }
 
     fprintf(f, "\n");
@@ -478,7 +476,7 @@ int test_fn_loopback_onoff(struct bladerf *dev, struct app_params *p)
 
     test.dev = dev;
     test.params = p;
-    test.num_bursts = 25;
+    test.num_bursts = 1000;
     test.stop = false;
 
     pthread_mutex_init(&test.lock, NULL);
