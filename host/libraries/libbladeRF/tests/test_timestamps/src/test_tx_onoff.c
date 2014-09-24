@@ -76,13 +76,24 @@ static const struct test_case tests[] = {
 };
 
 static int run(struct bladerf *dev, struct app_params *p,
-               int16_t *buf, const struct test_case *t)
+               const struct test_case *t)
 {
     int status, status_out;
     unsigned int samples_left;
     size_t i;
     struct bladerf_metadata meta;
+    int16_t *samples, *buf;
 
+    samples = calloc(2 * sizeof(int16_t), p->buf_size + 2);
+    if (samples == NULL) {
+        perror("malloc");
+        return BLADERF_ERR_MEM;
+    }
+
+    /* Leave the last two samples zero */
+    for (i = 0; i < (2 * p->buf_size); i += 2) {
+        samples[i] = samples[i + 1] = MAGNITUDE;
+    }
 
     memset(&meta, 0, sizeof(meta));
 
@@ -106,6 +117,8 @@ static int run(struct bladerf *dev, struct app_params *p,
     for (i = 0; i < t->iterations && status == 0; i++) {
         meta.flags = BLADERF_META_FLAG_TX_BURST_START;
         samples_left = t->burst_len;
+        buf = samples;
+
 
         printf("Sending burst @ %llu\n", (unsigned long long) meta.timestamp);
 
@@ -126,6 +139,7 @@ static int run(struct bladerf *dev, struct app_params *p,
 
             meta.flags &= ~BLADERF_META_FLAG_TX_BURST_START;
             samples_left -= to_send;
+            buf += 2 * to_send;
         }
 
         meta.timestamp += (t->burst_len + t->gap_len);
@@ -156,26 +170,16 @@ out:
 
     status = first_error(status, status_out);
 
+    free(samples);
     return status;
 }
 
 int test_fn_tx_onoff(struct bladerf *dev, struct app_params *p)
 {
     int status = 0;
-    int16_t *samples;
     size_t i;
     int cmd = 0;
     bool skip_print = false;
-
-    samples = (int16_t*) malloc(p->buf_size * 2 * sizeof(int16_t));
-    if (samples == NULL) {
-        perror("malloc");
-        return BLADERF_ERR_MEM;
-    }
-
-    for (i = 0; i < (2 * p->buf_size); i += 2) {
-        samples[i] = samples[i + 1] = MAGNITUDE;
-    }
 
     i = 0;
     while (cmd != 'q' && i < ARRAY_SIZE(tests) && status == 0) {
@@ -205,12 +209,12 @@ int test_fn_tx_onoff(struct bladerf *dev, struct app_params *p)
             case 'q':
                 break;
 
-            case 'R':
-                status = run(dev, p, samples, &tests[i]);
+            case 't':
+                status = run(dev, p, &tests[i]);
                 break;
 
             case 'r':
-                status = run(dev, p, samples, &tests[i]);
+                status = run(dev, p, &tests[i]);
                 i++;
                 break;
 
@@ -235,7 +239,6 @@ int test_fn_tx_onoff(struct bladerf *dev, struct app_params *p)
 
     }
 
-    free(samples);
     return status;
 }
 
