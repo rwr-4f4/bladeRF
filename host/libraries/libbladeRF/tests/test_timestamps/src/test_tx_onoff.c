@@ -84,14 +84,14 @@ static int run(struct bladerf *dev, struct app_params *p,
     struct bladerf_metadata meta;
     int16_t *samples, *buf;
 
-    samples = calloc(2 * sizeof(int16_t), p->buf_size + 2);
+    samples = calloc(2 * sizeof(int16_t), t->burst_len + 2);
     if (samples == NULL) {
         perror("malloc");
         return BLADERF_ERR_MEM;
     }
 
     /* Leave the last two samples zero */
-    for (i = 0; i < (2 * p->buf_size); i += 2) {
+    for (i = 0; i < (2 * t->burst_len); i += 2) {
         samples[i] = samples[i + 1] = MAGNITUDE;
     }
 
@@ -116,7 +116,7 @@ static int run(struct bladerf *dev, struct app_params *p,
 
     for (i = 0; i < t->iterations && status == 0; i++) {
         meta.flags = BLADERF_META_FLAG_TX_BURST_START;
-        samples_left = t->burst_len;
+        samples_left = t->burst_len + 2;
         buf = samples;
 
 
@@ -142,7 +142,7 @@ static int run(struct bladerf *dev, struct app_params *p,
             buf += 2 * to_send;
         }
 
-        meta.timestamp += (t->burst_len + t->gap_len);
+        meta.timestamp += (t->burst_len + t->gap_len - 2);
     }
 
     printf("Waiting for samples to finish...\n");
