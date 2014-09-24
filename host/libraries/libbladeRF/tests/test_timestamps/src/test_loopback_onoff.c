@@ -118,7 +118,7 @@ void *rx_task(void *args)
     uint64_t burst_start, burst_end, burst_end_prev;
     bool stop;
 
-#ifdef ENABLE_RX_FILE
+#if ENABLE_RX_FILE
     FILE *debug = fopen("debug.bin", "wb");
     if (!debug) {
         perror("fopen");
