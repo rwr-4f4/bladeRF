@@ -130,6 +130,7 @@ void *rx_task(void *args)
         return NULL;
     }
 
+    idx = 0;
     status = 0;
     burst_num = 0;
 

@@ -295,7 +295,7 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
     uint8_t *buf_src = NULL;
     unsigned int samples_to_copy = 0;
     unsigned int samples_per_buffer = 0;
-    uint64_t target_timestamp;
+    uint64_t target_timestamp = UINT64_MAX;
 
     if (s == NULL || samples == NULL) {
         log_debug("NULL pointer passed to %s\n", __FUNCTION__);
