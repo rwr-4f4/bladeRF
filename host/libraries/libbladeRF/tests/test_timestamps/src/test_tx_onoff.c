@@ -164,10 +164,10 @@ int test_fn_tx_onoff(struct bladerf *dev, struct app_params *p)
     int status = 0;
     int16_t *samples;
     size_t i;
-    int cmd;
+    int cmd = 0;
     bool skip_print = false;
 
-    samples = malloc(p->buf_size * 2 * sizeof(int16_t));
+    samples = (int16_t*) malloc(p->buf_size * 2 * sizeof(int16_t));
     if (samples == NULL) {
         perror("malloc");
         return BLADERF_ERR_MEM;
