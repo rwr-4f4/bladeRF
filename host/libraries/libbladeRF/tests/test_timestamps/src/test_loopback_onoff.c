@@ -32,7 +32,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <limits.h>
-#include <inttypes.h>
 #include <pthread.h>
 #include <libbladeRF.h>
 #include "test_timestamps.h"
@@ -71,7 +70,7 @@ static int16_t *init(struct test *t, bladerf_module m)
     int status;
     int16_t *samples;
 
-    samples = malloc(2 * sizeof(samples[0]) * t->params->buf_size);
+    samples = (int16_t*) malloc(2 * sizeof(samples[0]) * t->params->buf_size);
     if (samples == NULL) {
         perror("malloc");
         return NULL;
@@ -288,7 +287,7 @@ static void * tx_task(void *args)
     int16_t *samples;
     size_t i;
     struct bladerf_metadata meta;
-    unsigned int samples_left;
+    uint64_t samples_left;
     struct test *t = (struct test *) args;
     bool stop = false;
 
@@ -315,12 +314,15 @@ static void * tx_task(void *args)
         meta.flags |= BLADERF_META_FLAG_TX_BURST_START;
         samples_left = t->bursts[i].duration;
 
+        assert(samples_left <= UINT_MAX);
+
         if (i != 0) {
             meta.timestamp += (t->bursts[i-1].duration + t->bursts[i].gap);
         }
 
         while (samples_left != 0 && status == 0) {
-            unsigned int to_send = uint_min(t->params->buf_size, samples_left);
+            unsigned int to_send = uint_min(t->params->buf_size,
+                                            (unsigned int) samples_left);
 
             if (to_send == samples_left) {
                 meta.flags |= BLADERF_META_FLAG_TX_BURST_END;
@@ -332,8 +334,8 @@ static void * tx_task(void *args)
                                      t->params->timeout_ms);
 
             if (status != 0) {
-                fprintf(stderr, "Failed to TX @ burst %"PRIu64", with %u "
-                        "samples left: %s\n",
+                fprintf(stderr, "Failed to TX @ burst %"PRIu64", with %"PRIu64
+                        " samples left: %s\n",
                         i + 1, samples_left, bladerf_strerror(status));
 
                 /* Stop the RX worker */
@@ -481,7 +483,7 @@ int test_fn_loopback_onoff(struct bladerf *dev, struct app_params *p)
 
     pthread_mutex_init(&test.lock, NULL);
 
-    test.bursts = malloc(test.num_bursts * sizeof(test.bursts[0]));
+    test.bursts = (struct burst *) malloc(test.num_bursts * sizeof(test.bursts[0]));
     if (test.bursts == NULL) {
         perror("malloc");
         return -1;

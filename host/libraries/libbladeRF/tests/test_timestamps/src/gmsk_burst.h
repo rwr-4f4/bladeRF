@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <inttypes.h>
 #include "host_config.h"
 
 #define GMSK_SPS 8

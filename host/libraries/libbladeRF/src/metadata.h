@@ -95,7 +95,7 @@ static inline uint64_t metadata_get_timestamp(const uint8_t *header)
    return ret;
 }
 
-static inline uint64_t metadata_get_flags(const uint8_t *header)
+static inline uint32_t metadata_get_flags(const uint8_t *header)
 {
    uint32_t ret;
    assert(sizeof(ret) == METADATA_FLAGS_SIZE);

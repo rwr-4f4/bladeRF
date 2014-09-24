@@ -28,7 +28,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <inttypes.h>
+#include <limits.h>
 #include <libbladeRF.h>
 #include "test_timestamps.h"
 #include "rel_assert.h"
@@ -94,7 +94,8 @@ static int run(struct bladerf *dev, struct app_params *p,
            t->gap, t->read_size, t->iterations);
     printf("--------------------------------------------------------\n");
 
-    counter = t->gap - 1;
+    assert(t->gap <= UINT_MAX);
+    counter = (unsigned int) (t->gap - 1);
 
     for (i = 0; i < t->iterations && status == 0 && pass; i++) {
         assert(t->gap >= t->read_size);
@@ -111,7 +112,7 @@ static int run(struct bladerf *dev, struct app_params *p,
         if (!counter_data_is_valid(samples, t->read_size, counter)) {
             pass = false;
         } else {
-            counter += t->gap;
+            counter += (unsigned int) t->gap;
         }
     }
 

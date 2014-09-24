@@ -32,9 +32,25 @@
 #include "sync_worker.h"
 #include "minmax.h"
 #include "metadata.h"
+#include "rel_assert.h"
 
 static inline size_t samples2bytes(struct bladerf_sync *s, size_t n) {
     return s->stream_config.bytes_per_sample * n;
+}
+
+static inline unsigned int msg_per_buf(struct bladerf *dev,
+                                       size_t buf_size, size_t bytes_per_sample) {
+
+    size_t n = buf_size / (dev->msg_size / bytes_per_sample);
+    assert(n <= UINT_MAX);
+    return (unsigned int) n;
+}
+
+static inline unsigned int samples_per_msg(struct bladerf *dev, size_t bytes_per_sample)
+{
+    size_t n = (dev->msg_size - METADATA_HEADER_SIZE) / bytes_per_sample;
+    assert(n <= UINT_MAX);
+    return (unsigned int) n;
 }
 
 int sync_init(struct bladerf *dev,
@@ -128,9 +144,8 @@ int sync_init(struct bladerf *dev,
     sync->stream_config.bytes_per_sample = bytes_per_sample;
 
     sync->meta.state = SYNC_META_STATE_HEADER;
-    sync->meta.msg_per_buf = buffer_size / (dev->msg_size / bytes_per_sample);
-    sync->meta.samples_per_msg =
-        (dev->msg_size - METADATA_HEADER_SIZE) / bytes_per_sample;
+    sync->meta.msg_per_buf = msg_per_buf(dev, buffer_size, bytes_per_sample);
+    sync->meta.samples_per_msg = samples_per_msg(dev, bytes_per_sample);
 
     log_verbose("%s: Buffer size: %u\n",
                 __FUNCTION__, buffer_size);
@@ -245,7 +260,10 @@ static int wait_for_buffer(struct buffer_mgmt *b, unsigned int timeout_ms,
 /* Returns # of samples left in a message (SC16Q11 mode only) */
 static inline unsigned int left_in_msg(struct bladerf_sync *s)
 {
-    return s->meta.samples_per_msg - s->meta.curr_msg_off;
+    size_t ret = s->meta.samples_per_msg - s->meta.curr_msg_off;
+    assert(ret <= UINT_MAX);
+
+    return (unsigned int) ret;
 }
 
 static inline void advance_rx_buffer(struct buffer_mgmt *b)
@@ -254,6 +272,13 @@ static inline void advance_rx_buffer(struct buffer_mgmt *b)
 
     b->status[b->cons_i] = SYNC_BUFFER_EMPTY;
     b->cons_i = (b->cons_i + 1) % b->num_buffers;
+}
+
+static inline unsigned int timestamp_to_msg(struct bladerf_sync *s, uint64_t t)
+{
+    uint64_t m =  t / s->meta.samples_per_msg;
+    assert(m <= UINT_MAX);
+    return (unsigned int) m;
 }
 
 int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
@@ -546,10 +571,10 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                             }
 
                         } else {
-                            const unsigned int time_delta =
+                            const uint64_t time_delta =
                                 target_timestamp - s->meta.curr_timestamp;
 
-                            unsigned int left_in_buffer =
+                            uint64_t left_in_buffer =
                                 s->meta.samples_per_msg *
                                     (s->meta.msg_per_buf - s->meta.msg_num);
 
@@ -576,8 +601,7 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                             } else {
                                 s->meta.state = SYNC_META_STATE_HEADER;
 
-                                s->meta.msg_num +=
-                                    time_delta / s->meta.samples_per_msg;
+                                s->meta.msg_num += timestamp_to_msg(s, time_delta);
 
                                 log_verbose("%s: Seeking to message %u.\n",
                                             __FUNCTION__, s->meta.msg_num);
@@ -839,7 +863,7 @@ int sync_tx(struct bladerf *dev, void *samples, unsigned int num_samples,
                              * message within the buffer */
                             memcpy(s->meta.curr_msg + METADATA_HEADER_SIZE +
                                         samples2bytes(s, s->meta.curr_msg_off),
-                                   samples + samples2bytes(s, samples_written),
+                                   samples_src + samples2bytes(s, samples_written),
                                    samples2bytes(s, samples_to_copy));
 
                             s->meta.curr_msg_off += samples_to_copy;

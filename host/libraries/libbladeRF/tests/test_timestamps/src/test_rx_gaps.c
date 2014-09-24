@@ -29,7 +29,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <inttypes.h>
+#include <limits.h>
 #include <libbladeRF.h>
 #include "test_timestamps.h"
 #include "rel_assert.h"
@@ -60,7 +60,7 @@ static const struct test_case tests[] = {
     { RANDOM_GAP_SIZE, 500 },
 };
 
-static inline uint64_t get_gap(struct app_params *p, const struct test_case *t)
+static inline unsigned int get_gap(struct app_params *p, const struct test_case *t)
 {
     uint64_t gap;
 
@@ -75,9 +75,10 @@ static inline uint64_t get_gap(struct app_params *p, const struct test_case *t)
         gap = t->gap;
     }
 
+    assert(gap <= UINT_MAX);
     assert(gap <= p->buf_size);
 
-    return gap;
+    return (unsigned int) gap;
 }
 
 static int run(struct bladerf *dev, struct app_params *p,
@@ -85,7 +86,8 @@ static int run(struct bladerf *dev, struct app_params *p,
 {
     int status, status_out;
     struct bladerf_metadata meta;
-    uint64_t timestamp, gap;
+    uint64_t timestamp;
+    unsigned int gap;
     uint32_t counter;
     unsigned int i;
     bool pass = true;
@@ -186,7 +188,7 @@ int test_fn_rx_gaps(struct bladerf *dev, struct app_params *p)
     int16_t *samples;
     size_t i;
 
-    samples = malloc(p->buf_size * 2 * sizeof(int16_t));
+    samples = (int16_t*) malloc(p->buf_size * 2 * sizeof(int16_t));
     if (samples == NULL) {
         perror("malloc");
         return BLADERF_ERR_MEM;

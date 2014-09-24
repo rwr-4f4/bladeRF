@@ -31,7 +31,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <limits.h>
-#include <inttypes.h>
 #include <libbladeRF.h>
 #include "test_timestamps.h"
 #include "gmsk_burst.h"
