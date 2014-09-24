@@ -47,17 +47,32 @@ struct test_case {
 };
 
 static const struct test_case tests[] = {
-    { 1024, 1006,   2000, 8 },
-#if 0
-    { 1024, 100000, 50000,  10 },
-    { 1024, 100000, 25000,  10 },
-    { 1024, 100000, 1000,   10 },
+    { 1024,  16,     1024,   128},
+    { 1024,  128,    1024,   32 },
+    { 1024,  1006,   1024,   16 },
+    { 1024,  2048,   1024,   10 },
+    { 1024,  2048,   2048,   10 },
+    { 1024,  2048,   4096,   10 },
+    { 1024,  5000,   3000,   5 },
+    { 1024,  10000,  5000,   5 },
 
-    { 1024, 100000, 10000,  10 },
-    { 1024, 50000,  10000,  10 },
-    { 1024, 25000,  10000,  10 },
-    { 1024, 1000,   10000,  10 },
-#endif
+    { 2048,  16,     2048,   128},
+    { 2048,  128,    2048,   32 },
+    { 2048,  1006,   2048,   16 },
+    { 2048,  2048,   2048,   10 },
+    { 2048,  2048,   2048,   10 },
+    { 2048,  2048,   4096,   10 },
+    { 2048,  5000,   3000,   5 },
+    { 2048,  10000,  5000,   5 },
+
+    { 16384, 16,     16384,  10 },
+    { 16384, 128,    16384,  10 },
+    { 16384, 1006,   16384,  16 },
+    { 2048,  2048,   16384,  10 },
+    { 2048,  2048,   16384,  10 },
+    { 2048,  2048,   16384,  10 },
+    { 2048,  5000,   19000,  5 },
+    { 2048,  10000,  25000,  5 },
 };
 
 static int run(struct bladerf *dev, struct app_params *p,
@@ -149,6 +164,8 @@ int test_fn_tx_onoff(struct bladerf *dev, struct app_params *p)
     int status = 0;
     int16_t *samples;
     size_t i;
+    int cmd;
+    bool skip_print = false;
 
     samples = malloc(p->buf_size * 2 * sizeof(int16_t));
     if (samples == NULL) {
@@ -160,9 +177,62 @@ int test_fn_tx_onoff(struct bladerf *dev, struct app_params *p)
         samples[i] = samples[i + 1] = MAGNITUDE;
     }
 
-    for (i = 0; i < ARRAY_SIZE(tests) && status == 0; i++) {
+    i = 0;
+    while (cmd != 'q' && i < ARRAY_SIZE(tests) && status == 0) {
         assert((tests[i].burst_len + tests[i].gap_len) >= tests[i].buf_len);
-        status = run(dev, p, samples, &tests[i]);
+
+        if (!skip_print) {
+            printf("\nTest %u\n", (unsigned int) i + 1);
+            printf("---------------------------------\n");
+            printf("Buffer length: %u\n", tests[i].buf_len);
+            printf("Burst length:  %u\n", tests[i].burst_len);
+            printf("Gap length:    %u\n", tests[i].gap_len);
+            printf("Iterations:    %u\n", tests[i].iterations);
+            printf("\n");
+            printf("Select one of the following:\n");
+            printf(" s - (S)kip this test.\n");
+            printf(" p - Go to the (p)revious test.\n");
+            printf(" r - (R)un and increment to the next test\n");
+            printf(" t - Run and return to (t)his test.\n");
+            printf(" q - (Q)uit.\n");
+            printf("\n> ");
+        }
+
+        skip_print = false;
+
+        cmd = getchar();
+        switch (cmd) {
+            case 'q':
+                break;
+
+            case 'R':
+                status = run(dev, p, samples, &tests[i]);
+                break;
+
+            case 'r':
+                status = run(dev, p, samples, &tests[i]);
+                i++;
+                break;
+
+            case 's':
+                i++;
+                break;
+
+            case 'p':
+                if (i >= 1) {
+                    i--;
+                }
+                break;
+
+            case '\r':
+            case '\n':
+                skip_print = true;
+                break;
+
+            default:
+                break;
+        }
+
     }
 
     free(samples);
