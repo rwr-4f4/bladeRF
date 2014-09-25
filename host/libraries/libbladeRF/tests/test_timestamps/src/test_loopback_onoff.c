@@ -41,7 +41,11 @@
 #define RX_POWER_THRESH (256 * 256)
 
 /* These definitions enable some debugging code */
-#define ENABLE_RX_FILE      0   /* Save RX'd samples to debug.bin */
+#define ENABLE_RX_FILE      0   /* Save RX'd samples to debug.bin. If using
+                                 * this, you'll want to reduce test.num_bursts
+                                 * to a small value and set the prng seed to
+                                 * start at the desired burst. */
+
 #define DISABLE_RX_LOOPBACK 0   /* Disable RX task & transmit to the TX port */
 
 struct burst {
@@ -268,7 +272,6 @@ void *rx_task(void *args)
     }
 
     free(samples);
-    bladerf_enable_module(t->dev, BLADERF_MODULE_RX, false);
 
 #if ENABLE_RX_FILE
     fclose(debug);
@@ -359,7 +362,8 @@ static void * tx_task(void *args)
     usleep(2500000);
 
     free(samples);
-    bladerf_enable_module(t->dev, BLADERF_MODULE_TX, false);
+
+    printf("TX: Exiting task.\n");
     return NULL;
 }
 
