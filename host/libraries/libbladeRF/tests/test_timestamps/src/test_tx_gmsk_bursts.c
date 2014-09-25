@@ -258,8 +258,9 @@ static int transmit_bursts(struct bladerf *dev, struct app_params *p)
     for (i = status = 0; i < iterations && status == 0; i++) {
         status = bladerf_sync_tx(dev, gmsk_burst, burst_len, &meta, 2000);
 
-        /* Distance between beginning of each burst is 10k samples */
-        meta.timestamp += 10000 - burst_len;
+        /* Distance between beginning of each burst is 5k samples */
+        assert(burst_len < 5000);
+        meta.timestamp += 5000 - burst_len;
     }
 
     usleep(1500000);
