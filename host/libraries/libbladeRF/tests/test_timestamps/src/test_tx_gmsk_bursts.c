@@ -153,7 +153,7 @@ static int setup_device(struct bladerf *dev, struct app_params *p)
         printf("  TXVGA1: %d\n", txvga1);
     }
 
-    status = bladerf_set_txvga2(dev, 10);
+    status = bladerf_set_txvga2(dev, txvga2);
     if (status != 0) {
         fprintf(stderr, "Failed to set TXVGA2: %s\n", bladerf_strerror(status));
         return status;
