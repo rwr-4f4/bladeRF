@@ -65,41 +65,20 @@ int sync_init(struct bladerf *dev,
     struct bladerf_sync *sync;
     int status = 0;
     size_t i, bytes_per_sample;
-    uint32_t gpio_val;
 
     if (num_transfers >= num_buffers) {
         return BLADERF_ERR_INVAL;
     }
 
-    status = CONFIG_GPIO_READ(dev, &gpio_val);
-    if (status != 0) {
-        return status;
-    }
-
     switch (format) {
         case BLADERF_FORMAT_SC16_Q11:
-            bytes_per_sample = 4;
-
-            /* Disable timestamps */
-            gpio_val &= ~BLADERF_GPIO_TIMESTAMP;
-            gpio_val &= ~BLADERF_GPIO_TIMESTAMP_DIV2;
-            break;
-
         case BLADERF_FORMAT_SC16_Q11_META:
             bytes_per_sample = 4;
-
-            /* Enable timestamps, with 1 count per sample */
-            gpio_val |= (BLADERF_GPIO_TIMESTAMP | BLADERF_GPIO_TIMESTAMP_DIV2);
             break;
 
         default:
             log_debug("Invalid format value: %d\n", format);
             return BLADERF_ERR_INVAL;
-    }
-
-    status = CONFIG_GPIO_WRITE(dev, gpio_val);
-    if (status != 0) {
-        return status;
     }
 
     /* bladeRF GPIF DMA requirement */
@@ -119,7 +98,6 @@ int sync_init(struct bladerf *dev,
                 status = BLADERF_ERR_MEM;
             }
             break;
-
 
         default:
             log_debug("Invalid bladerf_module value encountered: %d", module);

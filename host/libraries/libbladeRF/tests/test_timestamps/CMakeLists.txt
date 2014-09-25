@@ -26,6 +26,7 @@ set(SRC
     src/test_tx_onoff.c
     src/test_tx_gmsk_bursts.c
     src/test_loopback_onoff.c
+    src/test_format_mismatch.c
     ${BLADERF_HOST_COMMON_SOURCE_DIR}/conversions.c
 )
 

@@ -52,6 +52,7 @@ DECLARE_TEST(rx_scheduled);
 DECLARE_TEST(tx_onoff);
 DECLARE_TEST(tx_gmsk_bursts);
 DECLARE_TEST(loopback_onoff);
+DECLARE_TEST(format_mismatch);
 
 static const struct test *tests[] = {
     TEST(rx_gaps),
@@ -59,6 +60,7 @@ static const struct test *tests[] = {
     TEST(tx_onoff),
     TEST(tx_gmsk_bursts),
     TEST(loopback_onoff),
+    TEST(format_mismatch),
 };
 
 
@@ -117,6 +119,7 @@ static void usage(const char *argv0)
     printf("                                Requires external verification.\n");
     printf("         loopback_onoff       Transmits ON-OFF bursts which are verified\n");
     printf("                                via baseband loopback to the RX module.\n");
+    printf("         format_mismatch      Exercise checking of conflicting formats.\n");
     printf("\n");
     printf("    -S, --seed <value>        Seed to use for PRNG-based test cases.\n");
     printf("\n");
