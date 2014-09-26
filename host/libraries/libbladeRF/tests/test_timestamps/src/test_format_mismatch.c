@@ -40,8 +40,10 @@ const struct interfaces {
     bool rx_sync;
     bool tx_sync;
 } ifs[] = {
-    { true, true  },
-    { true, false },
+    { true,     true  },
+    { true,     false },
+    { false,    true  },
+    { false,    false },
 };
 
 const struct test_case {
@@ -71,6 +73,10 @@ static struct async_task
     struct app_params *p;
     task_state state;
 
+    void **buffers;
+    size_t curr_buf_idx;
+    size_t n_buffers;
+
     pthread_t thread;
     pthread_mutex_t lock;
 } rx_task, tx_task;
@@ -81,21 +87,20 @@ void *callback(struct bladerf *dev, struct bladerf_stream *stream,
 
 {
     struct async_task *t = (struct async_task *) user_data;
-    void *ret = NULL;
+    void *ret;
 
 
     pthread_mutex_lock(&t->lock);
 
-    printf("State is %d in callback.\n", t->state);
+    t->curr_buf_idx = (t->curr_buf_idx + 1) % t->n_buffers;
+    ret = t->buffers[t->curr_buf_idx];
 
     switch (t->state) {
         case TASK_UNINITIALIZED:
             t->state = TASK_RUNNING;
-            ret = samples;
             break;
 
         case TASK_RUNNING:
-            ret = samples;
             break;
 
         case TASK_SHUTDOWN_REQUESTED:
@@ -117,8 +122,9 @@ static void *stream_task(void *arg)
     struct bladerf_stream *stream;
     struct async_task *t = (struct async_task *) arg;
 
-    status = bladerf_init_stream(&stream, t->dev, callback, NULL, 16, t->fmt,
-                                 t->p->buf_size, t->p->num_xfers, t);
+    status = bladerf_init_stream(&stream, t->dev, callback, &t->buffers,
+                                 t->n_buffers, t->fmt, t->p->buf_size,
+                                 t->p->num_xfers, t);
 
     if (status != 0) {
         t->exit_status = BLADERF_ERR_UNEXPECTED;
@@ -136,8 +142,6 @@ static void *stream_task(void *arg)
         goto out;
     }
 
-    printf("Initialized stream. Starting it...\n");
-
     status = bladerf_stream(stream, t->module);
     bladerf_deinit_stream(stream);
 
@@ -146,8 +150,6 @@ out:
     t->state = TASK_STOPPED;
     t->exit_status = status;
     pthread_mutex_unlock(&t->lock);
-
-    printf("Task ending.\n");
 
     return NULL;
 }
@@ -222,16 +224,12 @@ static int init_if(struct bladerf *dev, struct app_params *p, bladerf_module m,
             return status;
         }
 
-        printf("Started task\n");
-
         do {
             usleep(25000);
             pthread_mutex_lock(&t->lock);
             state = t->state;
             pthread_mutex_unlock(&t->lock);
         } while (state == TASK_UNINITIALIZED);
-
-        printf("Task is now in state %d\n", state);
 
         /* This may have already stopped if an invalid configuration was
          * detected. */
@@ -246,8 +244,6 @@ static int init_if(struct bladerf *dev, struct app_params *p, bladerf_module m,
             } else {
                 status = 0;
             }
-
-            printf("Task exited in init with %d\n", t->exit_status);
         }
     }
 
@@ -279,11 +275,16 @@ static int deinit_if(struct bladerf *dev, bladerf_module m, bool sync,
         }
 
         pthread_mutex_lock(&t->lock);
-        t->state = state = TASK_SHUTDOWN_REQUESTED;
+        state = t->state;
         pthread_mutex_unlock(&t->lock);
 
-        do {
+        while (state != TASK_STOPPED) {
+            pthread_mutex_lock(&t->lock);
+            t->state = TASK_SHUTDOWN_REQUESTED;
+            pthread_mutex_unlock(&t->lock);
+
             usleep(25000);
+
             pthread_mutex_lock(&t->lock);
             state = t->state;
             pthread_mutex_unlock(&t->lock);
@@ -308,7 +309,7 @@ static int deinit_if(struct bladerf *dev, bladerf_module m, bool sync,
 static void print_test_info(int n, const struct interfaces *i,
                             const struct test_case *t)
 {
-    printf("\nTest case %d\n", n);
+    printf("\nTest case %d\n", n + 1);
     printf("-----------------------------------\n");
     printf(" RX i/f: %s\n", i->rx_sync ? "sync" : "async");
     printf(" RX fmt: %s\n", t->rx_fmt == BLADERF_FORMAT_SC16_Q11 ?
@@ -327,6 +328,8 @@ static void init_task_info(struct bladerf *dev, struct app_params *p,
     t->dev = dev;
     t->module = m;
     t->p = p;
+    t->n_buffers = 16;
+    t->curr_buf_idx = 0;
 
     pthread_mutex_init(&t->lock, NULL);
 }
@@ -338,7 +341,7 @@ int test_fn_format_mismatch(struct bladerf *dev, struct app_params *p)
     bladerf_loopback lb_backup;
 
     init_task_info(dev, p, BLADERF_MODULE_RX, &rx_task);
-    init_task_info(dev, p, BLADERF_MODULE_RX, &tx_task);
+    init_task_info(dev, p, BLADERF_MODULE_TX, &tx_task);
 
     status = bladerf_get_loopback(dev, &lb_backup);
     if (status != 0) {
