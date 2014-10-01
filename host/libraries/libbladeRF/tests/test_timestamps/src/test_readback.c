@@ -96,6 +96,7 @@ void output_results(struct readings *r, unsigned int iterations,
         return;
     }
 
+    fprintf(f, "Mean intra-readback time: %f s.\n", mean_rb);
     fprintf(f, "RX samplerate: %u\n", samplerate_rx);
     fprintf(f, "TX samplerate: %u\n\n", samplerate_tx);
 
