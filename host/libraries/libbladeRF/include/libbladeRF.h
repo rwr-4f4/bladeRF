@@ -1245,8 +1245,30 @@ typedef enum {
 #define BLADERF_META_FLAG_TX_BURST_START   (1 << 0)
 
 /**
- * Mark the associated buffer as the end of a burst transmission.
- * This is only used for the bladerf_sync_tx() call.
+ * Mark the associated buffer as the end of a burst transmission. This will
+ * flush the remainder of the sync interfaces' current working buffer and send
+ * samples to the FPGA immediately.
+ *
+ * When specifying this flag to bladerf_sync_tx(), the final two samples
+ * <b>must</b> in the working buffer be zero. Unexpected results may occur if
+ * this is not the case. For simplicity, users should ensure the last two
+ * samples provided to bladerf_sync_tx() are zero.
+ *
+ * Flushing the sync interface's working buffer implies that after specifying
+ * this flag, the next timestamp that can be transmitted is the current
+ * timestamp plus the duration of the burst that this flag is ending <b>and</b>
+ * the remaining length of the remaining buffer that is flushed. (The buffer
+ * size, in this case, is the `buffer_size` value passed to the previous
+ * bladerf_sync_config() call.)
+ *
+ * Rather than attempting to keep track of the number of samples sent with
+ * respect to buffer sizes, it is easiest to always assume 1 buffer's worth of
+ * time is required between bursts.  If this is too much time, consider
+ * combining multiple bursts and manually zero-padding samples between them.
+ *
+ * This is only used for the bladerf_sync_tx() call. It is ignored by the
+ * bladerf_sync_rx() call.
+ *
  */
 #define BLADERF_META_FLAG_TX_BURST_END     (1 << 1)
 
@@ -1260,11 +1282,9 @@ typedef enum {
 /**
  * Sample metadata
  *
- * @bug Metadata support is not yet implemented. API users should not attempt
- *      to read or write to metadata structures.
- *
- *      The size of this structure may change when metadata support is
- *      completed, which may affect binary compatibility of library versions.
+ * This structure is used in conjunction with the BLADERF_FORMAT_SC16_Q11_META
+ * format to TX scheduled bursts or retrieve timestamp information about
+ * received samples.
  */
 struct bladerf_metadata {
 
@@ -1296,9 +1316,10 @@ struct bladerf_metadata {
      * a bladerf_sync_rx() call.
      *
      * This will not be equal to the requested count in the event of a
-     * discontinuity (i.e., when the status field indicates an overrun). When
-     * an overrun occurs, it is important not to read past the number of samples
-     * specified by this value.
+     * discontinuity (i.e., when the status field has the
+     * BLADERF_META_STATUS_OVERRUN flag set). When an overrun occurs, it is
+     * important not to read past the number of samples specified by this
+     * value, as the remaining contents of the buffer are undefined.
      *
      * This parameter is not currently used by bladerf_sync_tx().
      */
@@ -1726,9 +1747,16 @@ int CALL_CONV bladerf_sync_config(struct bladerf *dev,
  * parameter passed to bladerf_sync_config().
  *
  * @param[in]   dev         Device handle
+ *
  * @param[in]   samples     Array of samples
+ *
  * @param[in]   num_samples Number of samples to write
- * @param[in]   metadata    Sample metadata. (Currently not used.)
+ *
+ * @param[in]   metadata    Sample metadata. This must be provided when using
+ *                          the BLADERF_FORMAT_SC16_Q11_META format, but may
+ *                          be NULL when the interface is configured for
+ *                          the BLADERF_FORMAT_SC16_Q11 format.
+ *
  * @param[in]   timeout_ms  Timeout (milliseconds) for this call to complete.
  *                          Zero implies "infinite."
  *
@@ -1767,7 +1795,10 @@ int CALL_CONV bladerf_sync_tx(struct bladerf *dev,
  *
  * @param[in]   num_samples Number of samples to read
  *
- * @param[out]  metadata    Sample metadata. Currently not used. Pass NULL.
+ * @param[out]  metadata    Sample metadata. This must be provided when using
+ *                          the BLADERF_FORMAT_SC16_Q11_META format, but may
+ *                          be NULL when the interface is configured for
+ *                          the BLADERF_FORMAT_SC16_Q11 format.
  *
  * @param[in]   timeout_ms  Timeout (milliseconds) for this call to complete.
  *                          Zero implies "infinite."
