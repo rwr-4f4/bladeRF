@@ -81,6 +81,39 @@ static inline unsigned int get_gap(struct app_params *p, const struct test_case 
     return (unsigned int) gap;
 }
 
+static inline bool check_data(int16_t *samples, struct bladerf_metadata *meta,
+                              unsigned int i, uint64_t timestamp,
+                              uint32_t counter, unsigned int gap)
+{
+    bool pass = false;
+
+    if (meta->timestamp != timestamp) {
+        fprintf(stderr, "Timestamp mismatch @ %u. "
+                "Expected 0x%016"PRIx64", got 0x%016"PRIx64"\n",
+                i, timestamp, meta->timestamp);
+
+    } else if (gap != meta->actual_count) {
+        /* Info will be printed below  */
+    } else {
+        pass = counter_data_is_valid(samples, gap, counter);
+    }
+
+    if (!pass) {
+        fprintf(stderr, "Metadata status: 0x%08"PRIu32"\n", meta->status);
+
+        if (meta->status & BLADERF_META_STATUS_OVERRUN) {
+            fprintf(stderr, "Metadata indicates an ovverrun occurred, with "
+                    "%u samples returned.\n", meta->actual_count);
+        } else {
+            fprintf(stderr, "Metadata did NOT report an overrun, but "
+                    "reported %u samples returned.\n", meta->actual_count);
+        }
+
+    }
+
+    return pass;
+}
+
 static int run(struct bladerf *dev, struct app_params *p,
                int16_t *samples, const struct test_case *t)
 {
@@ -124,11 +157,9 @@ static int run(struct bladerf *dev, struct app_params *p,
     }
 
     counter = extract_counter_val(samples);
-    if (!counter_data_is_valid(samples, gap, counter)) {
-        pass = false;
-    } else {
-        counter += gap;
-    }
+    timestamp = meta.timestamp;
+    pass = check_data(samples, &meta, 0, timestamp, counter, gap);
+    counter += gap;
 
     printf("Initial timestamp:      0x%016"PRIx64"\n", meta.timestamp);
     printf("Intital counter value:  0x%08"PRIx32"\n", counter);
@@ -145,24 +176,8 @@ static int run(struct bladerf *dev, struct app_params *p,
             goto out;
         }
 
-        if (meta.timestamp != timestamp) {
-            pass = false;
-            fprintf(stderr, "Timestamp mismatch @ %u. "
-                    "Expected 0x%016"PRIx64", got 0x%016"PRIx64"\n",
-                    i, timestamp, meta.timestamp);
-
-        }
-
-        if (meta.status != 0) {
-            pass = false;
-            fprintf(stderr, "Metadata status: 0x%08"PRIu32"\n", meta.status);
-        }
-
-        if (!counter_data_is_valid(samples, gap, counter)) {
-            pass = false;
-        } else {
-            counter += gap;
-        }
+        pass = check_data(samples, &meta, i, timestamp, counter, gap);
+        counter += gap;
     }
 
     printf("Test %s.\n", pass ? "passed" : "failed");
