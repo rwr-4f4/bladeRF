@@ -461,7 +461,6 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                             s->meta.msg_timestamp != s->meta.curr_timestamp) {
 
                             user_meta->status |= BLADERF_META_STATUS_OVERRUN;
-                            user_meta->actual_rx_samples = samples_returned;
                             exit_early = true;
                             log_debug("Sample discontinuity detected @ "
                                       "buffer %u, message %u: Expected t=%llu, "
@@ -595,6 +594,10 @@ int sync_rx(struct bladerf *dev, void *samples, unsigned num_samples,
                 MUTEX_UNLOCK(&b->lock);
                 break;
         }
+    }
+
+    if (user_meta) {
+        user_meta->actual_count = samples_returned;
     }
 
     return status;

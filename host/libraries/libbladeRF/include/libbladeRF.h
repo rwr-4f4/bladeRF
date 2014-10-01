@@ -1291,13 +1291,18 @@ struct bladerf_metadata {
     uint32_t status;
 
     /**
-     * This output parameter is updated to refelct the actual number of
-     * continguous samples that have been populated in an RX buffer.
+     * This output parameter is updated to reflect the actual number of
+     * contiguous samples that have been populated in an RX buffer during
+     * a bladerf_sync_rx() call.
      *
      * This will not be equal to the requested count in the event of a
-     * discontinuity (i.e., when the status field indicates an overrun).
+     * discontinuity (i.e., when the status field indicates an overrun). When
+     * an overrun occurs, it is important not to read past the number of samples
+     * specified by this value.
+     *
+     * This parameter is not currently used by bladerf_sync_tx().
      */
-    size_t actual_rx_samples;
+    unsigned int actual_count;
 };
 
 
